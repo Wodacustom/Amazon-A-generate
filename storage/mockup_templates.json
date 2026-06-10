@@ -1,0 +1,29 @@
+[
+  {
+    "id": "custom-1207a757-12dd-4011-9ad4-70d24f513638",
+    "name": "棒球衣样机",
+    "category": [
+      "outdoor",
+      "drinkware"
+    ],
+    "scenes": [
+      "camping",
+      "outdoor"
+    ],
+    "platforms": [
+      "amazon"
+    ],
+    "ratios": [
+      "platform_default",
+      "4_5"
+    ],
+    "composition": "Use the uploaded mockup image as the scene template. Replace the product shown in the mockup with my original product image. Preserve my product shape, label, logo, packaging text, color, and proportions. Match the mockup perspective, lighting, contact shadow, material reflections, and depth of field. Keep the final image realistic, premium, and suitable for an ecommerce A+ detail page.",
+    "replaceableAreas": [],
+    "previewUrl": "/api/files/uploads/e73f8f1d-f192-422f-befc-666cd8bd709e.jpg",
+    "sourceUrl": "mockup://custom-1207a757-12dd-4011-9ad4-70d24f513638",
+    "tags": [
+      "custom",
+      "prompt-replace"
+    ]
+  }
+]

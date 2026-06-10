@@ -1,0 +1,6 @@
+[tool.pytest.ini_options]
+pythonpath = ["backend"]
+testpaths = ["backend/tests"]
+filterwarnings = [
+  "ignore:The .* attribute .* has no effect.*"
+]
