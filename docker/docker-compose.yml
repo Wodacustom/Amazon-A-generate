@@ -1,0 +1,86 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-aplus_agent}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - aplus_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    networks:
+      - aplus_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/backend/Dockerfile
+    environment:
+      APP_NAME: ${APP_NAME:-aplus-agent-api}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:password@postgres:5432/aplus_agent}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
+      LOCAL_STORAGE_DIR: ${LOCAL_STORAGE_DIR:-/app/storage}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-["http://localhost:5173","http://127.0.0.1:5173"]}
+      SCENE_AGENT_PROVIDER: ${SCENE_AGENT_PROVIDER:-rule}
+      PRODUCT_INFO_AGENT_PROVIDER: ${PRODUCT_INFO_AGENT_PROVIDER:-rule}
+      GENERATION_AGENT_PROVIDER: ${GENERATION_AGENT_PROVIDER:-mock}
+      IMAGE_GENERATION_PROVIDER: ${IMAGE_GENERATION_PROVIDER:-mock}
+      DEFAULT_IMAGE_MODEL: ${DEFAULT_IMAGE_MODEL:-nanobanana_pro}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      DASHSCOPE_BASE_URL: ${DASHSCOPE_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      DASHSCOPE_MODEL: ${DASHSCOPE_MODEL:-qwen3.6-plus}
+      DASHSCOPE_TIMEOUT_SECONDS: ${DASHSCOPE_TIMEOUT_SECONDS:-20}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_BASE_URL: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-pro}
+      GEMINI_IMAGE_MODEL: ${GEMINI_IMAGE_MODEL:-gemini-3-pro-image}
+      GEMINI_TIMEOUT_SECONDS: ${GEMINI_TIMEOUT_SECONDS:-120}
+    volumes:
+      - ../storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - aplus_network
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "${BACKEND_PORT:-8002}:8000"
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/frontend/Dockerfile
+    depends_on:
+      - backend
+    networks:
+      - aplus_network
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  aplus_network:
+    driver: bridge

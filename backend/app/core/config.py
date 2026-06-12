@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "aplus-agent-api"
     app_version: str = "0.1.0"
-    database_url: str = "mysql+aiomysql://root:password@127.0.0.1:3306/aplus_agent?charset=utf8mb4"
+    database_url: str = "postgresql+asyncpg://postgres:password@127.0.0.1:5432/aplus_agent"
     redis_url: str = "redis://localhost:6379/0"
     storage_backend: str = "local"
     local_storage_dir: str = "./storage"
