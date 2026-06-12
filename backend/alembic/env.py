@@ -11,7 +11,7 @@ config = context.config
 
 
 def _sync_database_url(url: str) -> str:
-    return url.replace("+asyncpg", "+psycopg").replace("+aiomysql", "+pymysql").replace("+asyncmy", "+pymysql")
+    return url.replace("+asyncpg", "+psycopg")
 
 
 config.set_main_option("sqlalchemy.url", _sync_database_url(settings.database_url))

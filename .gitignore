@@ -29,7 +29,7 @@ playwright-report/
 blob-report/
 output/
 frontend/output/
-
+.codegraph
 # TypeScript and tool caches
 *.tsbuildinfo
 .vite/
