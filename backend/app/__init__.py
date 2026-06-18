@@ -1,1 +1,1 @@
-"""APlus Agent backend package."""
+"""A+ content agent API."""

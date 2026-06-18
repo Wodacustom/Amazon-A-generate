@@ -1,71 +1,49 @@
-from fastapi import APIRouter, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from uuid import UUID
 
-from app.services.file_storage import delete_storage_file, save_upload_file, storage_path
-from app.services.in_memory import store
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import Response
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.session import get_db
+from app.models.file import FileAsset
+from app.schemas.file import FileAssetRead
+from app.services.storage import get_storage
 
 router = APIRouter()
 
 
-@router.post("/upload")
-async def upload_file(file: UploadFile) -> dict:
-    saved = await save_upload_file(file, "uploads", "upload.bin")
-    record = {
-        "id": saved["id"],
-        "filename": saved["filename"],
-        "contentType": saved["contentType"],
-        "url": f"/api/files/uploads/{saved['storageKey']}",
-        "storageKey": saved["storageKey"],
-    }
-    store.files[saved["id"]] = record
-    return record
+@router.post("", response_model=FileAssetRead, status_code=201)
+async def upload_file(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)) -> FileAsset:
+    data = await file.read()
+    stored = await get_storage().put_bytes(data, file.filename, file.content_type)
+    asset = FileAsset(
+        object_key=stored.object_key,
+        bucket=stored.bucket,
+        original_filename=file.filename,
+        content_type=stored.content_type,
+        size_bytes=stored.size_bytes,
+        url=stored.url,
+    )
+    db.add(asset)
+    await db.commit()
+    await db.refresh(asset)
+    return asset
 
 
-@router.get("/uploads/{filename}")
-def get_uploaded_file(filename: str) -> FileResponse:
-    path = storage_path("uploads", filename)
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
-
-    return FileResponse(path)
-
-
-@router.get("/{file_id}")
-def get_file(file_id: str) -> FileResponse:
-    record = store.files.get(file_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="File not found")
-
-    storage_key = record.get("storageKey")
-    if not storage_key:
-        raise HTTPException(status_code=400, detail="Invalid storage key")
-
-    path = storage_path("uploads", storage_key)
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
-
-    return FileResponse(path, media_type=record.get("contentType"), filename=record.get("filename"))
+@router.get("/{file_id}", response_model=FileAssetRead)
+async def get_file(file_id: UUID, db: AsyncSession = Depends(get_db)) -> FileAsset:
+    asset = await db.get(FileAsset, file_id)
+    if asset is None:
+        raise HTTPException(status_code=404, detail="File not found.")
+    return asset
 
 
-@router.delete("/{file_id}")
-def delete_file(file_id: str) -> dict[str, bool]:
-    record = store.files.pop(file_id, None)
-    if record:
-        delete_storage_file("uploads", record.get("storageKey"))
-    return {"ok": True}
-
-
-@router.get("/generated/{filename}")
-def get_generated_file(filename: str) -> FileResponse:
-    path = storage_path("generated", filename)
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="Generated file not found")
-    return FileResponse(path)
-
-
-@router.get("/garment-library/{filename}")
-def get_garment_library_file(filename: str) -> FileResponse:
-    path = storage_path("garment-library", filename)
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="Garment library file not found")
-    return FileResponse(path)
+@router.get("/{object_key:path}/content")
+async def download_file(object_key: str, db: AsyncSession = Depends(get_db)) -> Response:
+    result = await db.execute(select(FileAsset).where(FileAsset.object_key == object_key))
+    asset = result.scalar_one_or_none()
+    if asset is None:
+        raise HTTPException(status_code=404, detail="File not found.")
+    data, content_type = await get_storage().get_bytes(object_key)
+    return Response(content=data, media_type=content_type or asset.content_type or "application/octet-stream")
