@@ -62,13 +62,16 @@ export interface CreateGenerationTaskPayload {
 
 export interface GenerationTask {
   id: string
-  productName: string
+  // MVP 后端的 agent run 不一定返回产品名，前端展示时允许为空。
+  productName?: string
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | string
   progress: number
   currentStep: string
   createdAt: string
   errorMessage?: string
   conversationSessionId?: string
+  // 新后端 result 嵌在 agent run 中，这里记录 resultId 方便后续扩展。
+  resultId?: string
 }
 
 export interface GenerationProgressStep {
