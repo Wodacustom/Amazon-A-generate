@@ -27,13 +27,83 @@ docker compose -f docker\docker-compose.yml config
 - `pytest -p no:cacheprovider backend\tests`：运行后端测试，并避免写入 pytest 缓存。
 - `docker compose -f docker\docker-compose.yml config`：校验 Docker Compose 配置是否可解析。
 
-## Docker 启动
+## 部署方式
+
+### Docker 全栈部署
+
+推荐本地或测试环境使用 Docker Compose 启动完整依赖栈：
 
 ```powershell
 docker compose -f docker\docker-compose.yml up --build
 ```
 
+默认服务端口：
+
+- 前端：`http://localhost:5173`
+- 后端：`http://localhost:8002`
+- RustFS API：`http://localhost:9000`
+- RustFS Console：`http://localhost:9001`
+
 后端容器启动时会自动执行 `database/001_initial_mvp.sql`。该 SQL 会启用 PostgreSQL 的 `vector` 扩展，并创建 MVP 所需的数据表。
+
+如果之前启动过旧数据库结构，需要清空 Docker volume 后重新启动：
+
+```powershell
+docker compose -f docker\docker-compose.yml down -v
+docker compose -f docker\docker-compose.yml up --build
+```
+
+`down -v` 会删除 PostgreSQL、Redis、RustFS 的本地数据卷，执行前确认不需要保留旧数据。
+
+### 后端单独部署
+
+后端需要先准备 PostgreSQL + pgvector、Redis 和 RustFS/S3 兼容对象存储。安装依赖并启动：
+
+```powershell
+uv sync --dev
+python -m app.db.apply_sql database\001_initial_mvp.sql
+uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 8000
+```
+
+生产环境至少需要配置：
+
+- `DATABASE_URL`
+- `REDIS_URL`
+- `S3_ENDPOINT_URL`
+- `S3_ACCESS_KEY`
+- `S3_SECRET_KEY`
+- `S3_BUCKET`
+- `ALLOWED_ORIGINS`
+
+启动后可检查：
+
+```powershell
+Invoke-RestMethod http://localhost:8000/api/health
+```
+
+### 前端单独部署
+
+前端位于 `frontend/`，使用 Vue 3 + Vite。安装依赖、构建静态资源：
+
+```powershell
+cd frontend
+pnpm install
+pnpm run build
+```
+
+构建产物位于 `frontend/dist/`，可部署到 Nginx、对象存储静态站点或任意静态资源服务器。
+
+如果前端和后端不同域名部署，需要设置：
+
+```powershell
+VITE_API_BASE_URL=https://your-api-domain.example.com/api
+```
+
+本地预览构建产物：
+
+```powershell
+pnpm run preview
+```
 
 ## 项目结构
 
