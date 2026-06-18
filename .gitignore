@@ -76,6 +76,5 @@ env/
 
 # vscode settings for Python
 .vscode/settings.json
-
 AGENTS.md
 *.md
