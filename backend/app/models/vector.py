@@ -1,3 +1,5 @@
+"""pgvector 文档表。"""
+
 from uuid import UUID, uuid4
 
 from pgvector.sqlalchemy import Vector
@@ -11,6 +13,8 @@ from app.models.mixins import TimestampMixin
 
 
 class VectorDocument(Base, TimestampMixin):
+    """统一保存产品、结果和记忆文本的向量文档。"""
+
     __tablename__ = "vector_documents"
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)

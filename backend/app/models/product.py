@@ -1,3 +1,5 @@
+"""产品数据表。"""
+
 from uuid import UUID, uuid4
 
 from sqlalchemy import JSON, String, Text
@@ -9,6 +11,8 @@ from app.models.mixins import TimestampMixin
 
 
 class Product(Base, TimestampMixin):
+    """MVP 阶段的产品草稿。"""
+
     __tablename__ = "products"
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)

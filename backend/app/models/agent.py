@@ -1,3 +1,5 @@
+"""智能体运行和结果数据表。"""
+
 from uuid import UUID, uuid4
 
 from sqlalchemy import JSON, ForeignKey, String, Text
@@ -9,6 +11,8 @@ from app.models.mixins import TimestampMixin
 
 
 class AgentRun(Base, TimestampMixin):
+    """一次 LangGraph 运行记录。"""
+
     __tablename__ = "agent_runs"
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -21,6 +25,8 @@ class AgentRun(Base, TimestampMixin):
 
 
 class AgentResult(Base, TimestampMixin):
+    """一次智能体运行产出的结构化结果。"""
+
     __tablename__ = "agent_results"
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)

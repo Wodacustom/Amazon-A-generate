@@ -1,3 +1,5 @@
+"""产品接口请求和响应模型。"""
+
 from datetime import datetime
 from uuid import UUID
 
@@ -5,6 +7,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProductCreate(BaseModel):
+    """创建产品的请求体。"""
+
     name: str = Field(min_length=1, max_length=255)
     platform: str = "amazon"
     country: str = "US"
@@ -16,6 +20,8 @@ class ProductCreate(BaseModel):
 
 
 class ProductRead(ProductCreate):
+    """产品详情响应。"""
+
     id: UUID
     created_at: datetime
     updated_at: datetime | None = None

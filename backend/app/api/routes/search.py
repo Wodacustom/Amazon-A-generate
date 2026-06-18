@@ -1,3 +1,5 @@
+"""语义搜索接口。"""
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +12,7 @@ router = APIRouter()
 
 @router.get("", response_model=SearchResponse)
 async def search(query: str, limit: int = 5, db: AsyncSession = Depends(get_db)) -> dict:
+    """基于 pgvector 检索产品和智能体记忆。"""
     payload = SearchQuery(query=query, limit=limit)
     documents = await VectorStore().search(db, payload.query, payload.limit)
     return {

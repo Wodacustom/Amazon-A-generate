@@ -1,3 +1,5 @@
+"""RustFS/S3 对象存储封装。"""
+
 import asyncio
 from dataclasses import dataclass
 from uuid import uuid4
@@ -11,6 +13,8 @@ from app.core.config import settings
 
 @dataclass(frozen=True)
 class StoredObject:
+    """上传完成后返回给业务层的对象元数据。"""
+
     bucket: str
     object_key: str
     url: str
@@ -19,7 +23,10 @@ class StoredObject:
 
 
 class ObjectStorage:
+    """使用 boto3 访问 S3 兼容对象存储。"""
+
     def __init__(self) -> None:
+        """创建 S3 客户端，RustFS 使用 path-style 地址。"""
         self._client = boto3.client(
             "s3",
             endpoint_url=settings.s3_endpoint_url,
@@ -36,13 +43,16 @@ class ObjectStorage:
         )
 
     async def ensure_bucket(self) -> None:
+        """确保默认 bucket 存在。"""
         await asyncio.to_thread(self._ensure_bucket_sync)
 
     async def put_bytes(self, data: bytes, filename: str | None, content_type: str | None) -> StoredObject:
+        """上传字节内容到对象存储。"""
         await self.ensure_bucket()
         suffix = ""
         if filename and "." in filename:
             suffix = "." + filename.rsplit(".", 1)[1].lower()
+        # 使用 UUID 作为对象名，避免用户文件名导致冲突或路径穿越问题。
         object_key = f"uploads/{uuid4()}{suffix}"
         await asyncio.to_thread(
             self._client.put_object,
@@ -60,11 +70,13 @@ class ObjectStorage:
         )
 
     async def get_bytes(self, object_key: str) -> tuple[bytes, str | None]:
+        """从对象存储读取文件内容。"""
         response = await asyncio.to_thread(self._client.get_object, Bucket=settings.s3_bucket, Key=object_key)
         body = await asyncio.to_thread(response["Body"].read)
         return body, response.get("ContentType")
 
     def _ensure_bucket_sync(self) -> None:
+        """同步 boto3 调用：不存在时创建 bucket。"""
         try:
             self._client.head_bucket(Bucket=settings.s3_bucket)
         except ClientError:
@@ -72,4 +84,5 @@ class ObjectStorage:
 
 
 def get_storage() -> ObjectStorage:
+    """返回对象存储客户端实例。"""
     return ObjectStorage()

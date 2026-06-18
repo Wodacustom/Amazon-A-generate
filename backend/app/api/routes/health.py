@@ -1,3 +1,5 @@
+"""健康检查接口。"""
+
 import asyncio
 
 from fastapi import APIRouter
@@ -13,8 +15,10 @@ router = APIRouter()
 
 @router.get("/health")
 async def health() -> dict:
+    """检查后端依赖服务是否可用。"""
     checks = {"postgres": False, "pgvector": False, "redis": False, "rustfs": False}
     try:
+        # 每个外部依赖都限制在 1 秒内，避免本地未启动服务时接口长时间阻塞。
         await asyncio.wait_for(_check_postgres(checks), timeout=1)
     except Exception:
         pass
@@ -35,6 +39,7 @@ async def health() -> dict:
 
 
 async def _check_postgres(checks: dict[str, bool]) -> None:
+    """检查 PostgreSQL 连接和 pgvector 扩展。"""
     async with get_sessionmaker()() as session:
         await session.execute(text("select 1"))
         checks["postgres"] = True

@@ -1,3 +1,5 @@
+"""文件上传和下载接口。"""
+
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -15,6 +17,7 @@ router = APIRouter()
 
 @router.post("", response_model=FileAssetRead, status_code=201)
 async def upload_file(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)) -> FileAsset:
+    """上传文件到 RustFS，并把对象元数据写入 PostgreSQL。"""
     data = await file.read()
     stored = await get_storage().put_bytes(data, file.filename, file.content_type)
     asset = FileAsset(
@@ -33,6 +36,7 @@ async def upload_file(file: UploadFile = File(...), db: AsyncSession = Depends(g
 
 @router.get("/{file_id}", response_model=FileAssetRead)
 async def get_file(file_id: UUID, db: AsyncSession = Depends(get_db)) -> FileAsset:
+    """按文件 ID 查询元数据。"""
     asset = await db.get(FileAsset, file_id)
     if asset is None:
         raise HTTPException(status_code=404, detail="File not found.")
@@ -41,6 +45,7 @@ async def get_file(file_id: UUID, db: AsyncSession = Depends(get_db)) -> FileAss
 
 @router.get("/{object_key:path}/content")
 async def download_file(object_key: str, db: AsyncSession = Depends(get_db)) -> Response:
+    """按对象 key 从 RustFS 读取文件内容。"""
     result = await db.execute(select(FileAsset).where(FileAsset.object_key == object_key))
     asset = result.scalar_one_or_none()
     if asset is None:

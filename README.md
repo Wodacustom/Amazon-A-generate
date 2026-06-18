@@ -33,12 +33,12 @@ docker compose -f docker\docker-compose.yml config
 docker compose -f docker\docker-compose.yml up --build
 ```
 
-后端容器启动时会自动执行 Alembic migration。当前 initial migration 会启用 PostgreSQL 的 `vector` 扩展，并创建 MVP 所需的数据表。
+后端容器启动时会自动执行 `database/001_initial_mvp.sql`。该 SQL 会启用 PostgreSQL 的 `vector` 扩展，并创建 MVP 所需的数据表。
 
 ## 项目结构
 
 - `backend/app/`：FastAPI 后端源码，包含 API、schemas、services、agents、models、db 和 core 配置。
-- `backend/alembic/versions/`：数据库迁移脚本。
+- `database/`：数据库初始化 SQL 脚本。
 - `backend/tests/`：后端 pytest 测试。
 - `frontend/src/`：Vue 前端源码。
 - `docker/`：前后端 Dockerfile 与本地 Compose 编排。

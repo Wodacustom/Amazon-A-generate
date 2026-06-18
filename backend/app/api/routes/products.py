@@ -1,3 +1,5 @@
+"""产品接口。"""
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +13,7 @@ router = APIRouter()
 
 @router.post("", response_model=ProductRead, status_code=201)
 async def create_product(payload: ProductCreate, db: AsyncSession = Depends(get_db)) -> Product:
+    """创建产品，并同步写入一条 pgvector 检索文档。"""
     product = Product(**payload.model_dump())
     db.add(product)
     await db.flush()
@@ -27,6 +30,7 @@ async def create_product(payload: ProductCreate, db: AsyncSession = Depends(get_
 
 
 def _product_text(product: ProductCreate) -> str:
+    """把产品字段拼成向量化文本。"""
     return " ".join(
         [
             product.name,

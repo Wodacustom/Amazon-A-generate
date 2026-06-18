@@ -1,3 +1,5 @@
+"""智能体运行接口。"""
+
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -13,6 +15,7 @@ router = APIRouter()
 
 @router.post("/runs", response_model=AgentRunRead, status_code=201)
 async def create_run(payload: AgentRunCreate, db: AsyncSession = Depends(get_db)) -> dict:
+    """创建并执行一次 LangGraph MVP 运行。"""
     try:
         run, result = await AgentRunner().create_and_run(db, payload)
     except ValueError as exc:
@@ -22,6 +25,7 @@ async def create_run(payload: AgentRunCreate, db: AsyncSession = Depends(get_db)
 
 @router.get("/runs/{run_id}", response_model=AgentRunRead)
 async def get_run(run_id: UUID, db: AsyncSession = Depends(get_db)) -> dict:
+    """查询 agent run 状态和结果。"""
     run = await db.get(AgentRun, run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Agent run not found.")
@@ -30,6 +34,7 @@ async def get_run(run_id: UUID, db: AsyncSession = Depends(get_db)) -> dict:
 
 
 def _read(run: AgentRun, result) -> dict:
+    """把 SQLAlchemy 对象整理成响应模型需要的结构。"""
     return {
         "id": run.id,
         "product_id": run.product_id,

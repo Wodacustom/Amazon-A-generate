@@ -99,7 +99,7 @@ services:
         condition: service_healthy
     networks:
       - aplus_network
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    command: sh -c "python -m app.db.apply_sql /app/database/001_initial_mvp.sql && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     ports:
       - "${BACKEND_PORT:-8002}:8000"
 

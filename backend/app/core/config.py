@@ -1,8 +1,15 @@
+"""应用配置。
+
+配置优先从环境变量读取，本地可使用 backend/.env 或根目录 .env。
+"""
+
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """后端运行所需的环境配置。"""
+
     app_name: str = "aplus-agent-api"
     app_version: str = "0.1.0"
 
@@ -32,6 +39,7 @@ class Settings(BaseSettings):
         ]
     )
 
+    # extra="ignore" 允许旧环境变量存在，便于重构期平滑过渡。
     model_config = SettingsConfigDict(env_file=("backend/.env", ".env"), env_file_encoding="utf-8", extra="ignore")
 
 

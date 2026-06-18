@@ -1,7 +1,10 @@
+"""LangGraph MVP 工作流测试。"""
+
 from app.agents import ProductAgentGraph
 
 
 def test_product_agent_graph_generates_mvp_content():
+    """验证 mock 工作流能输出基础 A+ 模块和图片提示词。"""
     state = ProductAgentGraph().run(
         {
             "name": "Portable Coffee Grinder",
