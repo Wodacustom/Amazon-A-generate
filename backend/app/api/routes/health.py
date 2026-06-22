@@ -1,10 +1,47 @@
+"""健康检查接口。"""
+
+import asyncio
+
 from fastapi import APIRouter
+from sqlalchemy import text
 
 from app.core.config import settings
+from app.db.session import get_sessionmaker
+from app.services.redis_client import get_redis
+from app.services.storage import get_storage
 
-router = APIRouter(tags=["health"])
+router = APIRouter()
 
 
 @router.get("/health")
-def health_check() -> dict[str, str]:
-    return {"status": "ok", "service": settings.app_name, "version": settings.app_version}
+async def health() -> dict:
+    """检查后端依赖服务是否可用。"""
+    checks = {"postgres": False, "pgvector": False, "redis": False, "rustfs": False}
+    try:
+        # 每个外部依赖都限制在 1 秒内，避免本地未启动服务时接口长时间阻塞。
+        await asyncio.wait_for(_check_postgres(checks), timeout=1)
+    except Exception:
+        pass
+
+    try:
+        checks["redis"] = bool(await asyncio.wait_for(get_redis().ping(), timeout=1))
+    except Exception:
+        pass
+
+    try:
+        await asyncio.wait_for(get_storage().ensure_bucket(), timeout=1)
+        checks["rustfs"] = True
+    except Exception:
+        pass
+
+    status = "ok" if all(checks.values()) else "degraded"
+    return {"status": status, "service": settings.app_name, "version": settings.app_version, "checks": checks}
+
+
+async def _check_postgres(checks: dict[str, bool]) -> None:
+    """检查 PostgreSQL 连接和 pgvector 扩展。"""
+    async with get_sessionmaker()() as session:
+        await session.execute(text("select 1"))
+        checks["postgres"] = True
+        result = await session.execute(text("select exists(select 1 from pg_extension where extname = 'vector')"))
+        checks["pgvector"] = bool(result.scalar())

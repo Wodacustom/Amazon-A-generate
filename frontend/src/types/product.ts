@@ -29,6 +29,9 @@ export interface FileUploadResponse {
   contentType: string
   url: string
   storageKey: string
+  // 新后端额外返回 RustFS/S3 元数据，旧组件可忽略。
+  bucket?: string
+  sizeBytes?: number
 }
 
 export interface ProductInfoRecommendationRequest {

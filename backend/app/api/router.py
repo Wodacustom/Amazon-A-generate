@@ -1,28 +1,16 @@
+"""统一注册后端 API 路由。"""
+
 from fastapi import APIRouter
 
-from app.api.routes import (
-    auth_router,
-    conversations_router,
-    files_router,
-    garment_library_router,
-    generation_router,
-    health_router,
-    mockups_router,
-    products_router,
-    prompt_options_router,
-    style_memories_router,
-    tryon_router,
-)
+from app.api.routes import agent, auth, files, health, images, model_config, products, search
 
 api_router = APIRouter()
-api_router.include_router(health_router)
-api_router.include_router(auth_router, prefix="/auth", tags=["auth"])
-api_router.include_router(files_router, prefix="/files", tags=["files"])
-api_router.include_router(garment_library_router, prefix="/garment-library", tags=["garment-library"])
-api_router.include_router(products_router, prefix="/products", tags=["products"])
-api_router.include_router(generation_router, prefix="/generation", tags=["generation"])
-api_router.include_router(mockups_router, prefix="/mockups", tags=["mockups"])
-api_router.include_router(conversations_router, prefix="/conversations", tags=["conversations"])
-api_router.include_router(style_memories_router, prefix="/style-memories", tags=["style-memories"])
-api_router.include_router(prompt_options_router, tags=["prompt-options"])
-api_router.include_router(tryon_router, prefix="/tryon", tags=["tryon"])
+# 所有路由统一在 app.main 中挂到 /api 前缀下。
+api_router.include_router(health.router, tags=["health"])
+api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_router.include_router(files.router, prefix="/files", tags=["files"])
+api_router.include_router(images.router, prefix="/images", tags=["images"])
+api_router.include_router(products.router, prefix="/products", tags=["products"])
+api_router.include_router(agent.router, prefix="/agent", tags=["agent"])
+api_router.include_router(search.router, prefix="/search", tags=["search"])
+api_router.include_router(model_config.router, prefix="/admin/model-config", tags=["model-config"])

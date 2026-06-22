@@ -1,12 +1,14 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
       POSTGRES_DB: ${POSTGRES_DB:-aplus_agent}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
     networks:
       - aplus_network
     healthcheck:
@@ -27,6 +29,49 @@ services:
       timeout: 3s
       retries: 20
 
+  rustfs-permissions:
+    image: alpine:3.20
+    command: sh -c "chown -R 10001:10001 /data0 /data1 /data2 /data3 /logs"
+    volumes:
+      - rustfs_data_0:/data0
+      - rustfs_data_1:/data1
+      - rustfs_data_2:/data2
+      - rustfs_data_3:/data3
+      - rustfs_logs:/logs
+    networks:
+      - aplus_network
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    environment:
+      RUSTFS_VOLUMES: /data/rustfs{0...3}
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_CONSOLE_CORS_ALLOWED_ORIGINS: "*"
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-rustfsadmin}
+      RUSTFS_UNSAFE_BYPASS_DISK_CHECK: ${RUSTFS_UNSAFE_BYPASS_DISK_CHECK:-true}
+    volumes:
+      - rustfs_data_0:/data/rustfs0
+      - rustfs_data_1:/data/rustfs1
+      - rustfs_data_2:/data/rustfs2
+      - rustfs_data_3:/data/rustfs3
+      - rustfs_logs:/app/logs
+    depends_on:
+      rustfs-permissions:
+        condition: service_completed_successfully
+    networks:
+      - aplus_network
+    ports:
+      - "${RUSTFS_API_PORT:-9000}:9000"
+      - "${RUSTFS_CONSOLE_PORT:-9001}:9001"
+    healthcheck:
+      test: ["CMD", "sh", "-ec", "curl -fsS http://127.0.0.1:9000/health && curl -fsS http://127.0.0.1:9001/rustfs/console/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
   backend:
     build:
       context: ..
@@ -34,35 +79,31 @@ services:
     environment:
       APP_NAME: ${APP_NAME:-aplus-agent-api}
       APP_VERSION: ${APP_VERSION:-0.1.0}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:password@postgres:5432/aplus_agent}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
-      LOCAL_STORAGE_DIR: ${LOCAL_STORAGE_DIR:-/app/storage}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-secret-change-me}
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-1440}
+      MODEL_CONFIG_SECRET_KEY: ${MODEL_CONFIG_SECRET_KEY:-dev-model-config-secret-change-me}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123456}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-["http://localhost:5173","http://127.0.0.1:5173"]}
-      SCENE_AGENT_PROVIDER: ${SCENE_AGENT_PROVIDER:-rule}
-      PRODUCT_INFO_AGENT_PROVIDER: ${PRODUCT_INFO_AGENT_PROVIDER:-rule}
-      GENERATION_AGENT_PROVIDER: ${GENERATION_AGENT_PROVIDER:-mock}
-      IMAGE_GENERATION_PROVIDER: ${IMAGE_GENERATION_PROVIDER:-mock}
-      DEFAULT_IMAGE_MODEL: ${DEFAULT_IMAGE_MODEL:-nanobanana_pro}
-      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
-      DASHSCOPE_BASE_URL: ${DASHSCOPE_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
-      DASHSCOPE_MODEL: ${DASHSCOPE_MODEL:-qwen3.6-plus}
-      DASHSCOPE_TIMEOUT_SECONDS: ${DASHSCOPE_TIMEOUT_SECONDS:-20}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_BASE_URL: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-pro}
-      GEMINI_IMAGE_MODEL: ${GEMINI_IMAGE_MODEL:-gemini-3-pro-image}
-      GEMINI_TIMEOUT_SECONDS: ${GEMINI_TIMEOUT_SECONDS:-120}
-    volumes:
-      - ../storage:/app/storage
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://rustfs:9000}
+      S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-http://localhost:9000}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-rustfsadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-rustfsadmin}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:-aplus-agent}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      rustfs:
+        condition: service_healthy
     networks:
       - aplus_network
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    command: sh -c "python -m app.db.apply_sql /app/database/schema_table.sql && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     ports:
       - "${BACKEND_PORT:-8002}:8000"
 
@@ -80,6 +121,11 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  rustfs_data_0:
+  rustfs_data_1:
+  rustfs_data_2:
+  rustfs_data_3:
+  rustfs_logs:
 
 networks:
   aplus_network:

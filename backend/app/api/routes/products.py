@@ -1,51 +1,55 @@
-from datetime import UTC, datetime
-from uuid import uuid4
+"""产品接口。"""
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.schemas.product import ProductInfoRecommendationRequest, ProductInfoRecommendationResponse
-from app.services.product_info_recommendation import ProductInfoRecommendationAgent
-from app.services.in_memory import store
+from app.core.logging import get_logger
+from app.db.session import get_db
+from app.models.product import Product
+from app.schemas.product import ProductCreate, ProductRead
+from app.services.vectorstore import VectorStore
 
 router = APIRouter()
-recommendation_agent = ProductInfoRecommendationAgent()
+logger = get_logger(__name__)
 
 
-@router.post("/recommend-info", response_model=ProductInfoRecommendationResponse)
-def recommend_product_info(payload: ProductInfoRecommendationRequest) -> dict:
-    return recommendation_agent.recommend(payload)
-
-
-@router.post("", status_code=status.HTTP_201_CREATED)
-def create_product(payload: dict) -> dict:
-    product_id = payload.get("id") or str(uuid4())
-    record = {**payload, "id": product_id, "createdAt": datetime.now(UTC).isoformat()}
-    store.products[product_id] = record
-    return record
-
-
-@router.get("")
-def list_products() -> dict[str, list[dict]]:
-    return {"items": list(store.products.values())}
-
-
-@router.get("/{product_id}")
-def get_product(product_id: str) -> dict:
-    product = store.products.get(product_id)
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
+@router.post("", response_model=ProductRead, status_code=201)
+async def create_product(payload: ProductCreate, db: AsyncSession = Depends(get_db)) -> Product:
+    """创建产品，并同步写入一条 pgvector 检索文档。"""
+    product = Product(**payload.model_dump())
+    db.add(product)
+    await db.flush()
+    await VectorStore().add_document(
+        db,
+        source_type="product",
+        source_id=str(product.id),
+        content=_product_text(payload),
+        metadata={"platform": payload.platform, "country": payload.country, "language": payload.language},
+    )
+    await db.commit()
+    await db.refresh(product)
+    logger.info(
+        "product.created",
+        extra={
+            "event": "product.created",
+            "product_id": str(product.id),
+            "product_name": product.name,
+            "platform": product.platform,
+            "country": product.country,
+            "language": product.language,
+            "file_count": len(product.file_ids or []),
+        },
+    )
     return product
 
 
-@router.put("/{product_id}")
-def update_product(product_id: str, payload: dict) -> dict:
-    current = store.products.get(product_id, {"id": product_id})
-    current.update(payload)
-    store.products[product_id] = current
-    return current
-
-
-@router.delete("/{product_id}")
-def delete_product(product_id: str) -> dict[str, bool]:
-    store.products.pop(product_id, None)
-    return {"ok": True}
+def _product_text(product: ProductCreate) -> str:
+    """把产品字段拼成向量化文本。"""
+    return " ".join(
+        [
+            product.name,
+            product.description or "",
+            " ".join(product.selling_points),
+            str(product.specs),
+        ]
+    )

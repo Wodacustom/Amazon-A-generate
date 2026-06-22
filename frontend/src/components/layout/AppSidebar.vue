@@ -27,8 +27,10 @@
 import {
   Brush,
   Clock3,
+  Cpu,
   FileStack,
   Home,
+  ImagePlus,
   Images,
   LayoutTemplate,
   Settings,
@@ -45,10 +47,13 @@ const navItems = [
   { to: '/style-memory', label: '品牌风格', icon: Brush },
   { to: '/tasks', label: '历史记录', icon: Clock3 },
   { to: '/product-images', label: '商品套图', icon: Images },
+  { to: '/dialog-generation', label: '对话生成', icon: ImagePlus },
+  { to: '/image-generation', label: '生图测试', icon: ImagePlus },
   { to: '/team', label: '团队', icon: Users },
   { to: '/settings', label: '设置', icon: Settings },
   { to: '/continuous-edit', label: '连续改图', icon: FileStack },
   { to: '/admin', label: '管理员', icon: ShieldCheck },
+  { to: '/model-config', label: '模型配置', icon: Cpu },
 ]
 </script>
 
