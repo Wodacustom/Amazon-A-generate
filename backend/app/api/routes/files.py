@@ -13,12 +13,15 @@ from app.schemas.file import FileAssetRead
 from app.services.storage import get_storage
 
 router = APIRouter()
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 
 @router.post("", response_model=FileAssetRead, status_code=201)
 async def upload_file(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)) -> FileAsset:
     """上传文件到 RustFS，并把对象元数据写入 PostgreSQL。"""
     data = await file.read()
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File size exceeds 50MB.")
     stored = await get_storage().put_bytes(data, file.filename, file.content_type)
     asset = FileAsset(
         object_key=stored.object_key,

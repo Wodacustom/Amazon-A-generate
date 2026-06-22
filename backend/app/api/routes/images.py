@@ -16,6 +16,7 @@ from app.services.storage import get_storage
 router = APIRouter()
 
 PRESIGNED_EXPIRES_IN = 7200
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 
 @router.post("/generate", response_model=ImageGenerationRead)
@@ -98,6 +99,8 @@ async def _read_upload(upload: UploadFile) -> ImageFileInput:
     data = await upload.read()
     if not data:
         raise HTTPException(status_code=400, detail=f"{upload.filename or 'file'} is empty.")
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail=f"{upload.filename or 'file'} exceeds 50MB.")
     return ImageFileInput(filename=upload.filename or "image.png", data=data, content_type=upload.content_type)
 
 
@@ -119,4 +122,3 @@ def _extension_for_content_type(content_type: str) -> str:
     if content_type == "image/webp":
         return ".webp"
     return ".png"
-
