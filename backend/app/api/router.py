@@ -2,13 +2,14 @@
 
 from fastapi import APIRouter
 
-from app.api.routes import agent, auth, files, health, model_config, products, search
+from app.api.routes import agent, auth, files, health, images, model_config, products, search
 
 api_router = APIRouter()
 # 所有路由统一在 app.main 中挂到 /api 前缀下。
 api_router.include_router(health.router, tags=["health"])
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(files.router, prefix="/files", tags=["files"])
+api_router.include_router(images.router, prefix="/images", tags=["images"])
 api_router.include_router(products.router, prefix="/products", tags=["products"])
 api_router.include_router(agent.router, prefix="/agent", tags=["agent"])
 api_router.include_router(search.router, prefix="/search", tags=["search"])

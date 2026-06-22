@@ -3,7 +3,7 @@
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.model_config import ModelConfigRepository, ModelRouteConfig, RenderedPrompt
+from app.services.model_config import ModelConfigRepository, ModelProfileConfig, ModelRouteConfig, RenderedPrompt
 
 
 class ModelRegistry:
@@ -18,6 +18,10 @@ class ModelRegistry:
     async def get_route(self, db: AsyncSession | None, role: str, *, expected_type: str) -> ModelRouteConfig:
         """读取业务 role 对应的主/备模型配置。"""
         return await self.repository.get_route(db, role, expected_type=expected_type)
+
+    async def get_profile(self, db: AsyncSession, profile_id: int, *, expected_type: str) -> ModelProfileConfig:
+        """读取单个模型档案配置。"""
+        return await self.repository.get_profile(db, profile_id, expected_type=expected_type)
 
     async def render_prompt(self, db: AsyncSession | None, role: str, request: BaseModel) -> RenderedPrompt:
         """读取数据库模板，并用 Pydantic 请求对象渲染最终 messages。"""

@@ -6,13 +6,13 @@ from typing import Any, TypeVar
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.model_config import ModelProfileConfig
+from app.services.model_config import ModelProfileConfig, ModelRouteConfig
 from app.services.models.factory import ModelClientFactory
 from app.services.models.fallback import FallbackExecutor
 from app.services.models.registry import ModelRegistry
 from app.services.models.router import ModelRouter
-from app.services.models.strategy import ChatJsonStrategy, EmbeddingStrategy
-from app.services.models.types import Message
+from app.services.models.strategy import ChatJsonStrategy, EmbeddingStrategy, ImageGenerationStrategy
+from app.services.models.types import ImageGenerationInput, ImageGenerationOutput, Message
 
 T = TypeVar("T")
 
@@ -39,6 +39,7 @@ class ModelService:
         self.fallback = fallback or FallbackExecutor()
         self.chat_strategy = ChatJsonStrategy(self.factory, self.fallback)
         self.embedding_strategy = EmbeddingStrategy(self.factory, self.fallback)
+        self.image_strategy = ImageGenerationStrategy(self.factory, self.fallback)
         self._last_metadata: dict[str, Any] = {}
 
     async def chat_json(
@@ -116,12 +117,37 @@ class ModelService:
         self._last_metadata = self._metadata(role, profile, fallback=execution)
         return result
 
+    async def generate_image(
+        self,
+        request: ImageGenerationInput,
+        *,
+        db: AsyncSession | None = None,
+        role: str = "image_generation",
+        model_profile_id: int | None = None,
+    ) -> ImageGenerationOutput:
+        """按业务角色或指定模型档案调用图片模型。"""
+        if model_profile_id is not None:
+            if db is None:
+                raise ValueError("db is required when model_profile_id is provided.")
+            profile = await self.registry.get_profile(db, model_profile_id, expected_type="image")
+            route = ModelRouteConfig(role=role, primary=profile)
+        else:
+            route = await self.router.route(db, role, expected_type="image")
+        execution = await self.image_strategy.generate(route=route, request=request)
+        result, profile = execution.value
+        self._last_metadata = self._metadata(role, profile, fallback=execution)
+        return result
+
     def llm_metadata(self) -> dict[str, Any]:
         """返回最近一次聊天模型调用的可落库摘要。"""
         return {k: v for k, v in self._last_metadata.items() if k.startswith("model_") or k.startswith("template_")}
 
     def embedding_metadata(self) -> dict[str, Any]:
         """返回最近一次 embedding 调用的可落库摘要。"""
+        return self._last_metadata
+
+    def image_metadata(self) -> dict[str, Any]:
+        """返回最近一次图片模型调用的可落库摘要。"""
         return self._last_metadata
 
     def _metadata(self, role: str, profile: ModelProfileConfig, *, template=None, fallback=None) -> dict[str, Any]:

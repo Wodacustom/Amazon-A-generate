@@ -2,6 +2,7 @@
 
 import asyncio
 from dataclasses import dataclass
+from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
 import boto3
@@ -46,14 +47,16 @@ class ObjectStorage:
         """确保默认 bucket 存在。"""
         await asyncio.to_thread(self._ensure_bucket_sync)
 
-    async def put_bytes(self, data: bytes, filename: str | None, content_type: str | None) -> StoredObject:
+    async def put_bytes(
+        self, data: bytes, filename: str | None, content_type: str | None, *, prefix: str = "uploads"
+    ) -> StoredObject:
         """上传字节内容到对象存储。"""
         await self.ensure_bucket()
         suffix = ""
         if filename and "." in filename:
             suffix = "." + filename.rsplit(".", 1)[1].lower()
         # 使用 UUID 作为对象名，避免用户文件名导致冲突或路径穿越问题。
-        object_key = f"uploads/{uuid4()}{suffix}"
+        object_key = f"{prefix.strip('/')}/{uuid4()}{suffix}"
         await asyncio.to_thread(
             self._client.put_object,
             Bucket=settings.s3_bucket,
@@ -69,6 +72,16 @@ class ObjectStorage:
             content_type=content_type,
         )
 
+    async def presign_get_url(self, object_key: str, *, expires_in: int = 7200) -> str:
+        """生成对象临时访问链接。"""
+        url = await asyncio.to_thread(
+            self._client.generate_presigned_url,
+            "get_object",
+            Params={"Bucket": settings.s3_bucket, "Key": object_key},
+            ExpiresIn=expires_in,
+        )
+        return self._with_public_base_url(url)
+
     async def get_bytes(self, object_key: str) -> tuple[bytes, str | None]:
         """从对象存储读取文件内容。"""
         response = await asyncio.to_thread(self._client.get_object, Bucket=settings.s3_bucket, Key=object_key)
@@ -81,6 +94,17 @@ class ObjectStorage:
             self._client.head_bucket(Bucket=settings.s3_bucket)
         except ClientError:
             self._client.create_bucket(Bucket=settings.s3_bucket)
+
+    def _with_public_base_url(self, url: str) -> str:
+        """把容器内 endpoint 生成的签名 URL 改成浏览器可访问的公网地址。"""
+        if not settings.s3_public_base_url:
+            return url
+        signed = urlsplit(url)
+        public = urlsplit(settings.s3_public_base_url.rstrip("/"))
+        path = signed.path
+        if public.path:
+            path = f"{public.path.rstrip('/')}{signed.path}"
+        return urlunsplit((public.scheme, public.netloc, path, signed.query, signed.fragment))
 
 
 def get_storage() -> ObjectStorage:

@@ -7,7 +7,8 @@ import pytest
 from app.core.config import settings
 from app.services.model_config import ModelConfigurationError, ModelProfileConfig
 from app.services.models import ModelClientFactory, ModelService
-from app.services.models.adapters import NewAPIAdapter, QwenAdapter, VLLMAdapter
+from app.services.models.adapters import NewAPIAdapter, OpenAIAdapter, QwenAdapter, VLLMAdapter
+from app.services.models.types import GeneratedImage, ImageFileInput, ImageGenerationInput
 
 
 def test_mock_model_service_returns_stable_embedding_dimension():
@@ -55,10 +56,80 @@ def test_model_client_factory_routes_openai_compatible_adapters():
     assert isinstance(factory.create(_profile("newapi")), NewAPIAdapter)
 
 
-def _profile(provider: str) -> ModelProfileConfig:
+def test_mock_model_service_generates_image():
+    """验证空库 fallback 能打通 mock 生图。"""
+    service = ModelService()
+
+    output = asyncio.run(service.generate_image(ImageGenerationInput(prompt="product hero")))
+
+    assert output.operation == "generations"
+    assert output.images[0].content_type == "image/png"
+    assert output.images[0].data
+
+
+def test_openai_image_generation_uses_generations(monkeypatch):
+    """无参考图时应调用 images/generations。"""
+    adapter = OpenAIAdapter(_profile("openai", model_type="image"))
+    seen = {}
+
+    async def post_image_request(operation, request):
+        seen["operation"] = operation
+
+        class Response:
+            def json(self):
+                return {"data": [{"b64_json": "ignored"}]}
+
+        return Response()
+
+    async def collect_images(payload):
+        return [GeneratedImage(data=b"image", content_type="image/png")]
+
+    monkeypatch.setattr(adapter, "_post_image_request", post_image_request)
+    monkeypatch.setattr(adapter, "_collect_images", collect_images)
+
+    output = asyncio.run(adapter.generate_image(ImageGenerationInput(prompt="hero")))
+
+    assert seen["operation"] == "generations"
+    assert output.operation == "generations"
+
+
+def test_openai_image_edit_uses_edits(monkeypatch):
+    """有参考图时应调用 images/edits。"""
+    adapter = OpenAIAdapter(_profile("openai", model_type="image"))
+    seen = {}
+
+    async def post_image_request(operation, request):
+        seen["operation"] = operation
+
+        class Response:
+            def json(self):
+                return {"data": [{"b64_json": "ignored"}]}
+
+        return Response()
+
+    async def collect_images(payload):
+        return [GeneratedImage(data=b"image", content_type="image/png")]
+
+    monkeypatch.setattr(adapter, "_post_image_request", post_image_request)
+    monkeypatch.setattr(adapter, "_collect_images", collect_images)
+
+    output = asyncio.run(
+        adapter.generate_image(
+            ImageGenerationInput(
+                prompt="edit",
+                image=ImageFileInput(filename="image.png", data=b"image", content_type="image/png"),
+            )
+        )
+    )
+
+    assert seen["operation"] == "edits"
+    assert output.operation == "edits"
+
+
+def _profile(provider: str, *, model_type: str = "chat") -> ModelProfileConfig:
     return ModelProfileConfig(
         name=f"{provider}_profile",
-        model_type="chat",
+        model_type=model_type,
         provider=provider,
         model="demo",
         base_url="http://127.0.0.1/v1",

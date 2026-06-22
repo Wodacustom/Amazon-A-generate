@@ -3,11 +3,17 @@
 import hashlib
 import json
 import math
+from base64 import b64decode
 from collections.abc import Sequence
 
 from app.core.config import settings
 from app.services.model_config import ModelProfileConfig
-from app.services.models.types import Message
+from app.services.models.types import GeneratedImage, ImageGenerationInput, ImageGenerationOutput, Message
+
+
+MOCK_PNG = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+)
 
 
 class MockAdapter:
@@ -56,6 +62,17 @@ class MockAdapter:
 
     async def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
         return [self._mock_embedding(text) for text in texts]
+
+    async def generate_image(self, request: ImageGenerationInput) -> ImageGenerationOutput:
+        """返回一张固定 PNG，供本地无真实模型时测试完整链路。"""
+        operation = "edits" if request.image else "generations"
+        count = max(1, min(request.n, 10))
+        return ImageGenerationOutput(
+            images=[GeneratedImage(data=b64decode(MOCK_PNG), content_type="image/png") for _ in range(count)],
+            operation=operation,
+            usage={"mock": True},
+            raw_metadata={"provider": "mock", "model": self.profile.model},
+        )
 
     def _mock_embedding(self, text: str) -> list[float]:
         dimensions = self.profile.dimensions or settings.embedding_dimensions

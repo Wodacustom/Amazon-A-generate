@@ -1,6 +1,6 @@
 import { request } from './request'
 
-export type ModelType = 'chat' | 'embedding'
+export type ModelType = 'chat' | 'embedding' | 'image'
 export type ModelProvider = 'mock' | 'openai' | 'qwen' | 'gemini' | 'vllm' | 'newapi'
 
 export interface ModelProfile {
@@ -33,34 +33,22 @@ export interface ModelProfilePayload {
   enabled?: boolean
 }
 
-function authHeaders(accessToken: string) {
-  return { Authorization: `Bearer ${accessToken}` }
-}
-
-export async function listModelProfiles(accessToken: string) {
-  const { data } = await request.get<{ items: ModelProfile[] }>('/admin/model-config/profiles', {
-    headers: authHeaders(accessToken),
-  })
+export async function listModelProfiles() {
+  const { data } = await request.get<{ items: ModelProfile[] }>('/admin/model-config/profiles')
   return data.items
 }
 
-export async function createModelProfile(accessToken: string, payload: ModelProfilePayload) {
-  const { data } = await request.post<ModelProfile>('/admin/model-config/profiles', payload, {
-    headers: authHeaders(accessToken),
-  })
+export async function createModelProfile(payload: ModelProfilePayload) {
+  const { data } = await request.post<ModelProfile>('/admin/model-config/profiles', payload)
   return data
 }
 
-export async function updateModelProfile(accessToken: string, profileId: number, payload: ModelProfilePayload) {
-  const { data } = await request.patch<ModelProfile>(`/admin/model-config/profiles/${profileId}`, payload, {
-    headers: authHeaders(accessToken),
-  })
+export async function updateModelProfile(profileId: number, payload: ModelProfilePayload) {
+  const { data } = await request.patch<ModelProfile>(`/admin/model-config/profiles/${profileId}`, payload)
   return data
 }
 
-export async function deleteModelProfile(accessToken: string, profileId: number) {
-  const { data } = await request.delete<{ ok: boolean }>(`/admin/model-config/profiles/${profileId}`, {
-    headers: authHeaders(accessToken),
-  })
+export async function deleteModelProfile(profileId: number) {
+  const { data } = await request.delete<{ ok: boolean }>(`/admin/model-config/profiles/${profileId}`)
   return data
 }

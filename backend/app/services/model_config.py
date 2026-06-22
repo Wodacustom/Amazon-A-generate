@@ -68,6 +68,13 @@ class ModelConfigRepository:
         # 没有数据库配置时使用环境变量 fallback，方便本地开发和测试。
         return self._fallback_route(role, expected_type=expected_type)
 
+    async def get_profile(self, db: AsyncSession, profile_id: int, *, expected_type: str) -> ModelProfileConfig:
+        """按 ID 获取单个模型档案，供管理测试或手动覆盖路由使用。"""
+        profile = await db.get(ModelProfile, profile_id)
+        if profile is None:
+            raise ModelConfigurationError(f"Model profile {profile_id} not found.")
+        return self._profile_config(profile, expected_type=expected_type)
+
     async def render_prompt(self, db: AsyncSession | None, role: str, request: BaseModel) -> RenderedPrompt:
         """从数据库模板渲染模型请求。"""
         template = await self._get_db_template(db, role) if db is not None else None
@@ -161,6 +168,19 @@ class ModelConfigRepository:
                 api_key=None,
                 timeout_seconds=60.0,
                 temperature=0.2,
+                dimensions=None,
+                config={},
+            )
+        if expected_type == "image":
+            profile = ModelProfileConfig(
+                name="mock_image",
+                model_type="image",
+                provider="mock",
+                model="mock-image-v1",
+                base_url=None,
+                api_key=None,
+                timeout_seconds=60.0,
+                temperature=None,
                 dimensions=None,
                 config={},
             )

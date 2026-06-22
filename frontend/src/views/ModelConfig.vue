@@ -5,7 +5,6 @@
         <h1>模型配置</h1>
         <p>维护业务可调用模型的 base_url、api_key、模型名和厂商配置。</p>
       </div>
-      <el-input v-model="accessToken" class="token-input" placeholder="粘贴管理员 accessToken" show-password />
       <div class="header-actions">
         <el-button :loading="loading" @click="loadProfiles">刷新</el-button>
         <el-button type="primary" @click="openCreate">新增模型</el-button>
@@ -22,7 +21,7 @@
         <el-table-column prop="name" label="名称" min-width="150" />
         <el-table-column label="类型" width="110">
           <template #default="{ row }">
-            <el-tag :type="row.model_type === 'chat' ? 'primary' : 'success'" effect="plain">
+            <el-tag :type="modelTypeTag(row.model_type)" effect="plain">
               {{ row.model_type }}
             </el-tag>
           </template>
@@ -71,6 +70,7 @@
             <el-select v-model="form.model_type">
               <el-option label="Chat" value="chat" />
               <el-option label="Embedding" value="embedding" />
+              <el-option label="Image" value="image" />
             </el-select>
           </el-form-item>
           <el-form-item label="厂商">
@@ -136,7 +136,7 @@
 
 <script setup lang="ts">
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 
 import {
   createModelProfile,
@@ -148,7 +148,6 @@ import {
   type ModelProvider,
   type ModelType,
 } from '@/api/modelConfig'
-import { useUserStore } from '@/stores/user'
 
 interface ModelFormState {
   name: string
@@ -165,8 +164,6 @@ interface ModelFormState {
 }
 
 const providerOptions: ModelProvider[] = ['mock', 'openai', 'qwen', 'gemini', 'vllm', 'newapi']
-const user = useUserStore()
-const accessToken = ref(user.accessToken || localStorage.getItem('accessToken') || localStorage.getItem('adminAccessToken') || '')
 const profiles = ref<ModelProfile[]>([])
 const loading = ref(false)
 const saving = ref(false)
@@ -192,15 +189,10 @@ function createEmptyForm(): ModelFormState {
   }
 }
 
-function requireToken() {
-  if (!accessToken.value) {
-    ElMessage.warning('请先粘贴管理员 accessToken')
-    return false
-  }
-  // 页面不解析 JWT，只把管理员手动提供的 token 持久化给后续管理请求复用。
-  localStorage.setItem('adminAccessToken', accessToken.value)
-  localStorage.setItem('accessToken', accessToken.value)
-  return true
+function modelTypeTag(modelType: ModelType) {
+  if (modelType === 'chat') return 'primary'
+  if (modelType === 'embedding') return 'success'
+  return 'warning'
 }
 
 function resetForm(next: ModelFormState) {
@@ -208,10 +200,9 @@ function resetForm(next: ModelFormState) {
 }
 
 async function loadProfiles() {
-  if (!requireToken()) return
   loading.value = true
   try {
-    profiles.value = await listModelProfiles(accessToken.value)
+    profiles.value = await listModelProfiles()
   } finally {
     loading.value = false
   }
@@ -276,7 +267,6 @@ function buildPayload(config: Record<string, unknown>) {
 }
 
 async function submitProfile() {
-  if (!requireToken()) return
   if (!form.name.trim() || !form.model.trim()) {
     ElMessage.warning('请填写名称和模型名')
     return
@@ -288,10 +278,10 @@ async function submitProfile() {
   try {
     const payload = buildPayload(config)
     if (editingProfileId.value) {
-      await updateModelProfile(accessToken.value, editingProfileId.value, payload)
+      await updateModelProfile(editingProfileId.value, payload)
       ElMessage.success('模型已更新')
     } else {
-      await createModelProfile(accessToken.value, payload)
+      await createModelProfile(payload)
       ElMessage.success('模型已创建')
     }
     drawerVisible.value = false
@@ -302,12 +292,8 @@ async function submitProfile() {
 }
 
 async function updateEnabled(profile: ModelProfile, enabled: boolean) {
-  if (!requireToken()) {
-    profile.enabled = !enabled
-    return
-  }
   try {
-    await updateModelProfile(accessToken.value, profile.id, { enabled })
+    await updateModelProfile(profile.id, { enabled })
     ElMessage.success(enabled ? '模型已启用' : '模型已停用')
   } catch (error) {
     profile.enabled = !enabled
@@ -316,16 +302,17 @@ async function updateEnabled(profile: ModelProfile, enabled: boolean) {
 }
 
 async function removeProfile(profile: ModelProfile) {
-  if (!requireToken()) return
   await ElMessageBox.confirm(`确认删除模型「${profile.name}」？删除后仅做逻辑删除。`, '删除模型', {
     confirmButtonText: '删除',
     cancelButtonText: '取消',
     type: 'warning',
   })
-  await deleteModelProfile(accessToken.value, profile.id)
+  await deleteModelProfile(profile.id)
   ElMessage.success('模型已删除')
   await loadProfiles()
 }
+
+onMounted(loadProfiles)
 </script>
 
 <style scoped lang="scss">
@@ -337,7 +324,7 @@ async function removeProfile(profile: ModelProfile) {
 .model-header {
   display: grid;
   align-items: end;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 420px) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
 
   h1 {
@@ -348,10 +335,6 @@ async function removeProfile(profile: ModelProfile) {
     margin: 0;
     color: var(--text-secondary);
   }
-}
-
-.token-input {
-  width: 100%;
 }
 
 .header-actions {

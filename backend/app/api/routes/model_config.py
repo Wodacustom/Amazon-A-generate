@@ -4,10 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_admin
 from app.db.session import get_db
 from app.models.model_config import ModelConfigAuditLog, ModelProfile, ModelRequestTemplate, ModelRoute
-from app.models.user import SystemUser
 from app.schemas.model_config import (
     ModelProfileCreate,
     ModelProfileRead,
@@ -23,9 +21,7 @@ router = APIRouter()
 
 
 @router.get("/profiles", response_model=dict)
-async def list_profiles(
-    db: AsyncSession = Depends(get_db), admin: SystemUser = Depends(require_admin)
-) -> dict:
+async def list_profiles(db: AsyncSession = Depends(get_db)) -> dict:
     """列出模型档案。"""
     result = await db.execute(select(ModelProfile).where(ModelProfile.deleted == 0).order_by(ModelProfile.id))
     return {"items": [_profile_read(profile) for profile in result.scalars()]}
@@ -35,7 +31,6 @@ async def list_profiles(
 async def create_profile(
     payload: ModelProfileCreate,
     db: AsyncSession = Depends(get_db),
-    admin: SystemUser = Depends(require_admin),
 ) -> ModelProfileRead:
     """创建模型档案。"""
     # API key 只在写入时接收，入库前加密；响应由 _profile_read 统一脱敏。
@@ -54,7 +49,7 @@ async def create_profile(
     )
     db.add(profile)
     await db.flush()
-    await _audit(db, admin, "create_profile", "model_profile", str(profile.id), {"name": profile.name})
+    await _audit(db, "create_profile", "model_profile", str(profile.id), {"name": profile.name})
     await db.commit()
     await db.refresh(profile)
     return _profile_read(profile)
@@ -65,7 +60,6 @@ async def update_profile(
     profile_id: int,
     payload: ModelProfileUpdate,
     db: AsyncSession = Depends(get_db),
-    admin: SystemUser = Depends(require_admin),
 ) -> ModelProfileRead:
     """更新模型档案。"""
     profile = await db.get(ModelProfile, profile_id)
@@ -78,7 +72,7 @@ async def update_profile(
     if api_key:
         # 空 api_key 表示不改密钥；传入新值才覆盖加密字段。
         profile.encrypted_api_key = encrypt_secret(api_key)
-    await _audit(db, admin, "update_profile", "model_profile", str(profile.id), {"name": profile.name})
+    await _audit(db, "update_profile", "model_profile", str(profile.id), {"name": profile.name})
     await db.commit()
     await db.refresh(profile)
     return _profile_read(profile)
@@ -88,7 +82,6 @@ async def update_profile(
 async def delete_profile(
     profile_id: int,
     db: AsyncSession = Depends(get_db),
-    admin: SystemUser = Depends(require_admin),
 ) -> dict:
     """逻辑删除模型档案。"""
     profile = await db.get(ModelProfile, profile_id)
@@ -97,13 +90,13 @@ async def delete_profile(
     # 只标记 deleted，保留历史配置和审计链路；同时禁用，避免被路由继续调用。
     profile.deleted = 1
     profile.enabled = False
-    await _audit(db, admin, "delete_profile", "model_profile", str(profile.id), {"name": profile.name})
+    await _audit(db, "delete_profile", "model_profile", str(profile.id), {"name": profile.name})
     await db.commit()
     return {"ok": True}
 
 
 @router.get("/routes", response_model=dict)
-async def list_routes(db: AsyncSession = Depends(get_db), admin: SystemUser = Depends(require_admin)) -> dict:
+async def list_routes(db: AsyncSession = Depends(get_db)) -> dict:
     """列出模型路由。"""
     result = await db.execute(select(ModelRoute).where(ModelRoute.deleted == 0).order_by(ModelRoute.id))
     return {"items": list(result.scalars())}
@@ -113,7 +106,6 @@ async def list_routes(db: AsyncSession = Depends(get_db), admin: SystemUser = De
 async def upsert_route(
     payload: ModelRouteUpsert,
     db: AsyncSession = Depends(get_db),
-    admin: SystemUser = Depends(require_admin),
 ) -> ModelRoute:
     """创建或更新模型路由。"""
     result = await db.execute(select(ModelRoute).where(ModelRoute.role == payload.role, ModelRoute.deleted == 0))
@@ -124,14 +116,14 @@ async def upsert_route(
     route.primary_profile_id = payload.primary_profile_id
     route.fallback_profile_id = payload.fallback_profile_id
     route.enabled = payload.enabled
-    await _audit(db, admin, "upsert_route", "model_route", payload.role, payload.model_dump())
+    await _audit(db, "upsert_route", "model_route", payload.role, payload.model_dump())
     await db.commit()
     await db.refresh(route)
     return route
 
 
 @router.get("/templates", response_model=dict)
-async def list_templates(db: AsyncSession = Depends(get_db), admin: SystemUser = Depends(require_admin)) -> dict:
+async def list_templates(db: AsyncSession = Depends(get_db)) -> dict:
     """列出模型请求模板。"""
     result = await db.execute(
         select(ModelRequestTemplate).where(ModelRequestTemplate.deleted == 0).order_by(ModelRequestTemplate.id)
@@ -143,7 +135,6 @@ async def list_templates(db: AsyncSession = Depends(get_db), admin: SystemUser =
 async def upsert_template(
     payload: ModelTemplateUpsert,
     db: AsyncSession = Depends(get_db),
-    admin: SystemUser = Depends(require_admin),
 ) -> ModelRequestTemplate:
     """创建或更新模型请求模板。"""
     result = await db.execute(
@@ -159,7 +150,7 @@ async def upsert_template(
         db.add(template)
     for key, value in payload.model_dump().items():
         setattr(template, key, value)
-    await _audit(db, admin, "upsert_template", "model_request_template", payload.role, {"name": payload.name})
+    await _audit(db, "upsert_template", "model_request_template", payload.role, {"name": payload.name})
     await db.commit()
     await db.refresh(template)
     return template
@@ -185,11 +176,11 @@ def _profile_read(profile: ModelProfile) -> ModelProfileRead:
     )
 
 
-async def _audit(db: AsyncSession, admin: SystemUser, action: str, target_type: str, target_id: str, detail: dict) -> None:
+async def _audit(db: AsyncSession, action: str, target_type: str, target_id: str, detail: dict) -> None:
     """记录模型配置变更审计日志。"""
     db.add(
         ModelConfigAuditLog(
-            actor_user_id=admin.id,
+            actor_user_id=None,
             action=action,
             target_type=target_type,
             target_id=target_id,

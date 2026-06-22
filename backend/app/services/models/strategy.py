@@ -8,7 +8,7 @@ from app.core.config import settings
 from app.services.model_config import ModelConfigurationError, ModelProfileConfig
 from app.services.models.factory import ModelClientFactory
 from app.services.models.fallback import FallbackExecutor, FallbackResult
-from app.services.models.types import Message
+from app.services.models.types import ImageGenerationInput, ImageGenerationOutput, Message
 
 T = TypeVar("T")
 
@@ -82,6 +82,26 @@ class EmbeddingStrategy:
                 f"Embedding profile {profile.name} dimensions {profile.dimensions} "
                 f"does not match configured vector dimensions {settings.embedding_dimensions}."
             )
+
+
+class ImageGenerationStrategy:
+    """图片生成/编辑模型调用策略。"""
+
+    def __init__(self, factory: ModelClientFactory, fallback: FallbackExecutor) -> None:
+        self.factory = factory
+        self.fallback = fallback
+
+    async def generate(
+        self, *, route, request: ImageGenerationInput
+    ) -> FallbackResult[tuple[ImageGenerationOutput, ModelProfileConfig]]:
+        """调用主/备图片模型，并返回图片结果和实际使用的 profile。"""
+        async def call(profile: ModelProfileConfig) -> tuple[ImageGenerationOutput, ModelProfileConfig]:
+            return await self.factory.create(profile).generate_image(request), profile
+
+        return await self.fallback.run(
+            lambda: call(route.primary),
+            (lambda: call(route.fallback)) if route.fallback else None,
+        )
 
 
 def _parse_json_object(content: str) -> dict[str, Any]:

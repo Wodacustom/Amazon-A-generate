@@ -11,6 +11,7 @@ const router = createRouter({
     { path: '/results', name: 'results', component: () => import('@/views/ResultDetail.vue') },
     { path: '/results/:id', name: 'result-detail', component: () => import('@/views/ResultDetail.vue') },
     { path: '/product-images', name: 'product-images', component: () => import('@/views/ProductImages.vue') },
+    { path: '/image-generation', name: 'image-generation', component: () => import('@/views/ImageGeneration.vue') },
     { path: '/tryon', name: 'tryon', component: () => import('@/views/TryonAutomation.vue') },
     { path: '/continuous-edit', name: 'continuous-edit', component: () => import('@/views/ContinuousEdit.vue') },
     { path: '/admin', name: 'admin', component: () => import('@/views/AdminPanel.vue') },

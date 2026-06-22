@@ -192,14 +192,14 @@ CREATE TABLE IF NOT EXISTS model_profiles (
 COMMENT ON TABLE model_profiles IS '模型档案表，保存可调用模型的供应商、模型名、地址、密钥和运行参数';
 COMMENT ON COLUMN model_profiles.id IS '主键ID';
 COMMENT ON COLUMN model_profiles.name IS '模型档案名称，唯一，例如 mock_chat 或 qwen_copywriter';
-COMMENT ON COLUMN model_profiles.model_type IS '模型类型：chat 或 embedding';
+COMMENT ON COLUMN model_profiles.model_type IS '模型类型：chat、embedding 或 image';
 COMMENT ON COLUMN model_profiles.provider IS '模型供应商或协议适配器：mock/openai/qwen/gemini/vllm/newapi';
 COMMENT ON COLUMN model_profiles.model IS '供应商侧模型名称';
 COMMENT ON COLUMN model_profiles.base_url IS '模型接口基础地址';
 COMMENT ON COLUMN model_profiles.encrypted_api_key IS '加密后的模型 API Key';
 COMMENT ON COLUMN model_profiles.timeout_seconds IS '模型请求超时时间，单位秒';
 COMMENT ON COLUMN model_profiles.temperature IS '聊天模型采样温度';
-COMMENT ON COLUMN model_profiles.dimensions IS 'embedding 向量维度，chat 模型为空';
+COMMENT ON COLUMN model_profiles.dimensions IS 'embedding 向量维度，chat/image 模型为空';
 COMMENT ON COLUMN model_profiles.config IS '模型扩展配置 JSON';
 COMMENT ON COLUMN model_profiles.enabled IS '是否启用该模型档案';
 COMMENT ON COLUMN model_profiles.create_time IS '创建时间';
@@ -219,7 +219,7 @@ CREATE TABLE IF NOT EXISTS model_routes (
 
 COMMENT ON TABLE model_routes IS '模型路由表，保存业务场景 role 到主模型和备用模型的映射';
 COMMENT ON COLUMN model_routes.id IS '主键ID';
-COMMENT ON COLUMN model_routes.role IS '业务模型角色，唯一，例如 a_plus_content/image_prompt/retrieval_embedding';
+COMMENT ON COLUMN model_routes.role IS '业务模型角色，唯一，例如 a_plus_content/image_prompt/retrieval_embedding/image_generation';
 COMMENT ON COLUMN model_routes.primary_profile_id IS '主模型档案 ID';
 COMMENT ON COLUMN model_routes.fallback_profile_id IS '备用模型档案 ID，主模型失败时降级使用';
 COMMENT ON COLUMN model_routes.enabled IS '是否启用该路由';
@@ -276,7 +276,8 @@ COMMENT ON COLUMN model_config_audit_logs.create_time IS '创建时间';
 INSERT INTO model_profiles (name, model_type, provider, model, dimensions, enabled)
 VALUES
     ('mock_chat', 'chat', 'mock', 'mock-a-plus-v1', NULL, true),
-    ('mock_embedding', 'embedding', 'mock', 'mock-hash-v1', 1536, true)
+    ('mock_embedding', 'embedding', 'mock', 'mock-hash-v1', 1536, true),
+    ('mock_image', 'image', 'mock', 'mock-image-v1', NULL, true)
 ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO model_routes (role, primary_profile_id, enabled)
@@ -289,6 +290,10 @@ ON CONFLICT (role) DO NOTHING;
 
 INSERT INTO model_routes (role, primary_profile_id, enabled)
 SELECT 'retrieval_embedding', id, true FROM model_profiles WHERE name = 'mock_embedding'
+ON CONFLICT (role) DO NOTHING;
+
+INSERT INTO model_routes (role, primary_profile_id, enabled)
+SELECT 'image_generation', id, true FROM model_profiles WHERE name = 'mock_image'
 ON CONFLICT (role) DO NOTHING;
 
 INSERT INTO model_request_templates (role, name, version, system_prompt, user_template, response_contract, enabled)
