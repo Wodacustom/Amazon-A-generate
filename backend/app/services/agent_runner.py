@@ -40,7 +40,7 @@ class AgentRunner:
                 for doc in context_docs
             ]
             await self._set_progress(run.id, 35, "running_graph")
-            state = self.graph.run(product_input, context)
+            state = await self.graph.run(product_input, context, db)
             if state.get("errors"):
                 raise ValueError("; ".join(state["errors"]))
 

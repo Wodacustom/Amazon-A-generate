@@ -11,12 +11,12 @@ from app.models.mixins import TimestampMixin
 
 
 class FileAsset(Base, TimestampMixin):
-    """RustFS/S3 对象在数据库中的索引记录。"""
+    """RustFS/S3 对象在数据库中的元数据记录。"""
 
     __tablename__ = "files"
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    object_key: Mapped[str] = mapped_column(Text, unique=True, index=True)
+    object_key: Mapped[str] = mapped_column(Text, unique=True)
     bucket: Mapped[str] = mapped_column(String(255))
     original_filename: Mapped[str | None] = mapped_column(Text)
     content_type: Mapped[str | None] = mapped_column(String(255))

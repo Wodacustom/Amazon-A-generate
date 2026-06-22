@@ -23,12 +23,24 @@ class Settings(BaseSettings):
     s3_region: str = "us-east-1"
     s3_bucket: str = "aplus-agent"
 
+    jwt_secret_key: SecretStr = SecretStr("dev-secret-change-me")
+    jwt_expire_minutes: int = 1440
+    model_config_secret_key: SecretStr | None = None
+    admin_username: str = "admin"
+    admin_password: SecretStr = SecretStr("admin123456")
+
     embedding_provider: str = "mock"
     embedding_model: str = "mock-hash-v1"
-    embedding_dimensions: int = 8
+    embedding_base_url: str | None = None
+    embedding_api_key: SecretStr | None = None
+    embedding_dimensions: int = 1536
 
     llm_provider: str = "mock"
     llm_model: str = "mock-a-plus-v1"
+    llm_base_url: str | None = None
+    llm_api_key: SecretStr | None = None
+    llm_timeout_seconds: float = 60.0
+    llm_temperature: float = 0.2
 
     allowed_origins: list[str] = Field(
         default_factory=lambda: [

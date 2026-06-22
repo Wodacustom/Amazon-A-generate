@@ -1,21 +1,22 @@
-"""MVP 阶段的 mock embedding 服务。"""
+"""Embedding 服务门面。"""
 
-import hashlib
-import math
+from collections.abc import Sequence
 
-from app.core.config import settings
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.services.models import ModelService
 
 
 class EmbeddingService:
-    """生成固定维度、可重复的伪向量。"""
+    """通过统一模型网关生成向量。"""
 
-    def embed(self, text: str) -> list[float]:
-        """用 SHA-256 将文本稳定映射到配置维度。"""
-        digest = hashlib.sha256(text.encode("utf-8")).digest()
-        values = []
-        for index in range(settings.embedding_dimensions):
-            byte = digest[index % len(digest)]
-            values.append((byte / 127.5) - 1.0)
-        # 归一化后便于用 cosine distance 做相似度排序。
-        length = math.sqrt(sum(value * value for value in values)) or 1.0
-        return [round(value / length, 6) for value in values]
+    def __init__(self, model_service: ModelService | None = None) -> None:
+        self.model_service = model_service or ModelService()
+
+    async def embed(self, text: str, db: AsyncSession | None = None) -> list[float]:
+        """生成单条文本向量。"""
+        return await self.model_service.embed_query(text, db=db, role="retrieval_embedding")
+
+    async def embed_documents(self, texts: Sequence[str], db: AsyncSession | None = None) -> list[list[float]]:
+        """批量生成文档向量。"""
+        return await self.model_service.embed_documents(texts, db=db, role="retrieval_embedding")

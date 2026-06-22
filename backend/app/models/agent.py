@@ -17,7 +17,7 @@ class AgentRun(Base, TimestampMixin):
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     product_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("products.id", ondelete="SET NULL"))
-    status: Mapped[str] = mapped_column(String(50), default="queued", index=True)
+    status: Mapped[str] = mapped_column(String(50), default="queued")
     progress: Mapped[int] = mapped_column(default=0)
     current_step: Mapped[str | None] = mapped_column(String(100))
     input_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -30,7 +30,7 @@ class AgentResult(Base, TimestampMixin):
     __tablename__ = "agent_results"
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    run_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("agent_runs.id", ondelete="CASCADE"), index=True)
+    run_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("agent_runs.id", ondelete="CASCADE"))
     product_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("products.id", ondelete="SET NULL"))
     content_modules: Mapped[list[dict]] = mapped_column(JSON, default=list)
     image_prompts: Mapped[list[dict]] = mapped_column(JSON, default=list)

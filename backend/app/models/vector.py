@@ -18,8 +18,8 @@ class VectorDocument(Base, TimestampMixin):
     __tablename__ = "vector_documents"
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    source_type: Mapped[str] = mapped_column(String(80), index=True)
-    source_id: Mapped[str] = mapped_column(String(80), index=True)
+    source_type: Mapped[str] = mapped_column(String(80))
+    source_id: Mapped[str] = mapped_column(String(80))
     content: Mapped[str] = mapped_column(Text)
     document_metadata: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
     embedding: Mapped[list[float]] = mapped_column(Vector(settings.embedding_dimensions))

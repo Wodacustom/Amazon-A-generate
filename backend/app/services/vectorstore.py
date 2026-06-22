@@ -24,12 +24,13 @@ class VectorStore:
         metadata: dict | None = None,
     ) -> VectorDocument:
         """写入一条可检索文档。"""
+        embedding = await self.embedding_service.embed(content, db)
         document = VectorDocument(
             source_type=source_type,
             source_id=source_id,
             content=content,
             document_metadata=metadata or {},
-            embedding=self.embedding_service.embed(content),
+            embedding=embedding,
         )
         db.add(document)
         await db.flush()
@@ -37,7 +38,7 @@ class VectorStore:
 
     async def search(self, db: AsyncSession, query: str, limit: int = 5) -> list[VectorDocument]:
         """按余弦距离检索最相近的文档。"""
-        embedding = self.embedding_service.embed(query)
+        embedding = await self.embedding_service.embed(query, db)
         statement = select(VectorDocument).order_by(VectorDocument.embedding.cosine_distance(embedding)).limit(limit)
         result = await db.execute(statement)
         return list(result.scalars())
