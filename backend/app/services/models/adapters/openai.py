@@ -17,7 +17,7 @@ class OpenAIAdapter:
 
     async def chat_text(self, messages: Sequence[Message], *, temperature: float | None = None) -> str:
         if not self.profile.base_url:
-            raise ModelConfigurationError(f"{self.profile.name} requires base_url/LLM_BASE_URL.")
+            raise ModelConfigurationError(f"{self.profile.name} requires base_url.")
         if not self.profile.api_key:
             raise ModelConfigurationError(f"{self.profile.name} requires api_key.")
         try:
@@ -42,7 +42,7 @@ class OpenAIAdapter:
 
     def _embedding_model(self) -> Any:
         if not self.profile.base_url:
-            raise ModelConfigurationError(f"{self.profile.name} requires base_url/EMBEDDING_BASE_URL.")
+            raise ModelConfigurationError(f"{self.profile.name} requires base_url.")
         if not self.profile.api_key:
             raise ModelConfigurationError(f"{self.profile.name} requires api_key.")
         try:

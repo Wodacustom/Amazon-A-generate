@@ -31,14 +31,19 @@ def test_mock_model_service_parses_chat_json():
     assert payload["prompt_digest"]
 
 
-def test_openai_compatible_llm_requires_base_url(monkeypatch):
-    """真实 LLM provider 缺配置时应给出明确错误。"""
-    monkeypatch.setattr(settings, "llm_provider", "openai_compatible")
-    monkeypatch.setattr(settings, "llm_base_url", None)
-    monkeypatch.setattr(settings, "llm_api_key", None)
+def test_openai_compatible_llm_requires_base_url():
+    """真实模型档案缺 base_url 时应给出明确错误。"""
+    factory = ModelClientFactory()
+    profile = _profile("openai")
+    profile = ModelProfileConfig(
+        **{
+            **profile.__dict__,
+            "base_url": None,
+        }
+    )
 
-    with pytest.raises(ModelConfigurationError, match="LLM_BASE_URL"):
-        asyncio.run(ModelService().chat_text([{"role": "user", "content": "hello"}]))
+    with pytest.raises(ModelConfigurationError, match="base_url"):
+        asyncio.run(factory.create(profile).chat_text([{"role": "user", "content": "hello"}]))
 
 
 def test_model_client_factory_routes_openai_compatible_adapters():

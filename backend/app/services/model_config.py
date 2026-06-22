@@ -137,15 +137,15 @@ class ModelConfigRepository:
         )
 
     def _fallback_route(self, role: str, *, expected_type: str) -> ModelRouteConfig:
-        """从旧环境变量构建 fallback 路由，保持向后兼容。"""
+        """构建内置 mock fallback 路由，保证空库启动和测试无需真实模型配置。"""
         if expected_type == "embedding":
             profile = ModelProfileConfig(
-                name="env_embedding",
+                name="mock_embedding",
                 model_type="embedding",
-                provider=settings.embedding_provider,
-                model=settings.embedding_model,
-                base_url=settings.embedding_base_url,
-                api_key=settings.embedding_api_key.get_secret_value() if settings.embedding_api_key else None,
+                provider="mock",
+                model="mock-hash-v1",
+                base_url=None,
+                api_key=None,
                 timeout_seconds=60.0,
                 temperature=None,
                 dimensions=settings.embedding_dimensions,
@@ -153,14 +153,14 @@ class ModelConfigRepository:
             )
         else:
             profile = ModelProfileConfig(
-                name="env_llm",
+                name="mock_llm",
                 model_type="chat",
-                provider=settings.llm_provider,
-                model=settings.llm_model,
-                base_url=settings.llm_base_url,
-                api_key=settings.llm_api_key.get_secret_value() if settings.llm_api_key else None,
-                timeout_seconds=settings.llm_timeout_seconds,
-                temperature=settings.llm_temperature,
+                provider="mock",
+                model="mock-a-plus-v1",
+                base_url=None,
+                api_key=None,
+                timeout_seconds=60.0,
+                temperature=0.2,
                 dimensions=None,
                 config={},
             )

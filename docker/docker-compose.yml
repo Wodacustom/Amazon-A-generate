@@ -90,17 +90,6 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY:-rustfsadmin}
       S3_REGION: ${S3_REGION:-us-east-1}
       S3_BUCKET: ${S3_BUCKET:-aplus-agent}
-      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-mock}
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-mock-hash-v1}
-      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-}
-      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
-      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1536}
-      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
-      LLM_MODEL: ${LLM_MODEL:-mock-a-plus-v1}
-      LLM_BASE_URL: ${LLM_BASE_URL:-}
-      LLM_API_KEY: ${LLM_API_KEY:-}
-      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60}
-      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.2}
     depends_on:
       postgres:
         condition: service_healthy
