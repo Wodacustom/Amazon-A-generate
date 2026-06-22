@@ -46,7 +46,7 @@ export async function generateImage(payload: ImageGenerationPayload) {
   }
   const { data } = await request.post<ImageGenerationResponse>('/images/generate', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 300000,
+    timeout: 600000,
   })
   return data
 }

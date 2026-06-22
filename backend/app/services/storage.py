@@ -2,7 +2,6 @@
 
 import asyncio
 from dataclasses import dataclass
-from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
 import boto3
@@ -28,9 +27,14 @@ class ObjectStorage:
 
     def __init__(self) -> None:
         """创建 S3 客户端，RustFS 使用 path-style 地址。"""
-        self._client = boto3.client(
+        self._client = self._create_client(settings.s3_endpoint_url)
+        self._public_client = self._create_client(settings.s3_public_base_url or settings.s3_endpoint_url)
+
+    def _create_client(self, endpoint_url: str):
+        """创建指定 endpoint 的 S3 客户端。"""
+        return boto3.client(
             "s3",
-            endpoint_url=settings.s3_endpoint_url,
+            endpoint_url=endpoint_url,
             aws_access_key_id=settings.s3_access_key,
             aws_secret_access_key=settings.s3_secret_key.get_secret_value(),
             region_name=settings.s3_region,
@@ -74,13 +78,12 @@ class ObjectStorage:
 
     async def presign_get_url(self, object_key: str, *, expires_in: int = 7200) -> str:
         """生成对象临时访问链接。"""
-        url = await asyncio.to_thread(
-            self._client.generate_presigned_url,
+        return await asyncio.to_thread(
+            self._public_client.generate_presigned_url,
             "get_object",
             Params={"Bucket": settings.s3_bucket, "Key": object_key},
             ExpiresIn=expires_in,
         )
-        return self._with_public_base_url(url)
 
     async def get_bytes(self, object_key: str) -> tuple[bytes, str | None]:
         """从对象存储读取文件内容。"""
@@ -94,17 +97,6 @@ class ObjectStorage:
             self._client.head_bucket(Bucket=settings.s3_bucket)
         except ClientError:
             self._client.create_bucket(Bucket=settings.s3_bucket)
-
-    def _with_public_base_url(self, url: str) -> str:
-        """把容器内 endpoint 生成的签名 URL 改成浏览器可访问的公网地址。"""
-        if not settings.s3_public_base_url:
-            return url
-        signed = urlsplit(url)
-        public = urlsplit(settings.s3_public_base_url.rstrip("/"))
-        path = signed.path
-        if public.path:
-            path = f"{public.path.rstrip('/')}{signed.path}"
-        return urlunsplit((public.scheme, public.netloc, path, signed.query, signed.fragment))
 
 
 def get_storage() -> ObjectStorage:

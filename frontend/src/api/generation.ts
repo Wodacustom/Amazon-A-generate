@@ -45,7 +45,7 @@ export async function createGenerationTask(payload: CreateGenerationTaskPayload)
       product_input: toAgentProductInput(payload),
     },
     {
-      timeout: 300000,
+      timeout: 600000,
     },
   )
   return mapRunToTask(data, payload.productInfo.productName)

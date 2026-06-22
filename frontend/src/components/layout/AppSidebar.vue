@@ -47,6 +47,7 @@ const navItems = [
   { to: '/style-memory', label: '品牌风格', icon: Brush },
   { to: '/tasks', label: '历史记录', icon: Clock3 },
   { to: '/product-images', label: '商品套图', icon: Images },
+  { to: '/dialog-generation', label: '对话生成', icon: ImagePlus },
   { to: '/image-generation', label: '生图测试', icon: ImagePlus },
   { to: '/team', label: '团队', icon: Users },
   { to: '/settings', label: '设置', icon: Settings },

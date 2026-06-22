@@ -4,7 +4,7 @@ import type { CreateTryonJobPayload, TryonJob, TryonJobItem } from '@/types/task
 
 export async function createTryonJob(payload: CreateTryonJobPayload) {
   const { data } = await request.post<TryonJob>('/tryon/jobs', payload, {
-    timeout: 300000,
+    timeout: 600000,
   })
   return data
 }
