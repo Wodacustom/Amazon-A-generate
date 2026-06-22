@@ -57,7 +57,7 @@ export async function getGenerationTask(taskId: string) {
   return mapRunToTask(data)
 }
 
-export async function getGenerationResult(taskId: string) {
+export async function getGenerationResult(taskId: string): Promise<GenerationResult> {
   // MVP 后端通过 run 查询结果，前端仍按旧 result 类型消费。
   const { data } = await request.get<MvpAgentRun>(`/agent/runs/${taskId}`, {
     timeout: 60000,
@@ -68,19 +68,22 @@ export async function getGenerationResult(taskId: string) {
   return mapRunToResult(data)
 }
 
-export async function updateGenerationResult(resultId: string, payload: Partial<GenerationResult> & { versionLabel?: string }) {
+export async function updateGenerationResult(
+  resultId: string,
+  payload: Partial<GenerationResult> & { versionLabel?: string },
+): Promise<GenerationResult> {
   // MVP 后端暂未提供结果编辑持久化接口，先返回前端本地编辑后的结果。
   void resultId
   return payload as GenerationResult
 }
 
-export async function listResultVersions(resultId: string) {
+export async function listResultVersions(resultId: string): Promise<ResultVersion[]> {
   // MVP 后端暂未提供版本历史接口。
   void resultId
   return [] as ResultVersion[]
 }
 
-export async function createResultVersion(resultId: string, label = '手动保存') {
+export async function createResultVersion(resultId: string, label = '手动保存'): Promise<ResultVersion> {
   // MVP 后端暂未提供版本保存接口，返回本地占位版本供 UI 使用。
   return {
     id: `local-version-${Date.now()}`,
@@ -95,7 +98,7 @@ export async function createResultVersion(resultId: string, label = '手动保�
   } satisfies ResultVersion
 }
 
-export async function restoreResultVersion(resultId: string, versionId: string) {
+export async function restoreResultVersion(resultId: string, versionId: string): Promise<GenerationResult> {
   void versionId
   throw new Error(`MVP 暂不支持恢复版本：${resultId}`)
 }

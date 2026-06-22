@@ -27,6 +27,7 @@
 import {
   Brush,
   Clock3,
+  Cpu,
   FileStack,
   Home,
   Images,
@@ -49,6 +50,7 @@ const navItems = [
   { to: '/settings', label: '设置', icon: Settings },
   { to: '/continuous-edit', label: '连续改图', icon: FileStack },
   { to: '/admin', label: '管理员', icon: ShieldCheck },
+  { to: '/model-config', label: '模型配置', icon: Cpu },
 ]
 </script>
 

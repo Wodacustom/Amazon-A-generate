@@ -14,6 +14,7 @@ const router = createRouter({
     { path: '/tryon', name: 'tryon', component: () => import('@/views/TryonAutomation.vue') },
     { path: '/continuous-edit', name: 'continuous-edit', component: () => import('@/views/ContinuousEdit.vue') },
     { path: '/admin', name: 'admin', component: () => import('@/views/AdminPanel.vue') },
+    { path: '/model-config', name: 'model-config', component: () => import('@/views/ModelConfig.vue') },
     {
       path: '/team',
       name: 'team',

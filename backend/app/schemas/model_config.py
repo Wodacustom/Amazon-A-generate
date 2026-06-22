@@ -22,6 +22,7 @@ class ModelProfileCreate(BaseModel):
 class ModelProfileUpdate(BaseModel):
     """更新模型档案。"""
 
+    name: str | None = None
     model_type: str | None = None
     provider: str | None = None
     model: str | None = None

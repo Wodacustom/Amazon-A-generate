@@ -84,6 +84,24 @@ async def update_profile(
     return _profile_read(profile)
 
 
+@router.delete("/profiles/{profile_id}", response_model=dict)
+async def delete_profile(
+    profile_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: SystemUser = Depends(require_admin),
+) -> dict:
+    """逻辑删除模型档案。"""
+    profile = await db.get(ModelProfile, profile_id)
+    if profile is None or profile.deleted:
+        raise HTTPException(status_code=404, detail="Model profile not found.")
+    # 只标记 deleted，保留历史配置和审计链路；同时禁用，避免被路由继续调用。
+    profile.deleted = 1
+    profile.enabled = False
+    await _audit(db, admin, "delete_profile", "model_profile", str(profile.id), {"name": profile.name})
+    await db.commit()
+    return {"ok": True}
+
+
 @router.get("/routes", response_model=dict)
 async def list_routes(db: AsyncSession = Depends(get_db), admin: SystemUser = Depends(require_admin)) -> dict:
     """列出模型路由。"""
