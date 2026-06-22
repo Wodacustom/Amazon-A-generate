@@ -3,12 +3,14 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.logging import get_logger
 from app.db.session import get_db
 from app.models.product import Product
 from app.schemas.product import ProductCreate, ProductRead
 from app.services.vectorstore import VectorStore
 
 router = APIRouter()
+logger = get_logger(__name__)
 
 
 @router.post("", response_model=ProductRead, status_code=201)
@@ -26,6 +28,18 @@ async def create_product(payload: ProductCreate, db: AsyncSession = Depends(get_
     )
     await db.commit()
     await db.refresh(product)
+    logger.info(
+        "product.created",
+        extra={
+            "event": "product.created",
+            "product_id": str(product.id),
+            "product_name": product.name,
+            "platform": product.platform,
+            "country": product.country,
+            "language": product.language,
+            "file_count": len(product.file_ids or []),
+        },
+    )
     return product
 
 

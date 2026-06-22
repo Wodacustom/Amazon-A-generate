@@ -3,8 +3,11 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.logging import get_logger
 from app.models.vector import VectorDocument
 from app.services.embedding import EmbeddingService
+
+logger = get_logger(__name__)
 
 
 class VectorStore:
@@ -34,6 +37,17 @@ class VectorStore:
         )
         db.add(document)
         await db.flush()
+        logger.info(
+            "vector.document.added",
+            extra={
+                "event": "vector.document.added",
+                "document_id": str(document.id),
+                "source_type": source_type,
+                "source_id": source_id,
+                "content_length": len(content),
+                "metadata_keys": list((metadata or {}).keys()),
+            },
+        )
         return document
 
     async def search(self, db: AsyncSession, query: str, limit: int = 5) -> list[VectorDocument]:
@@ -41,4 +55,14 @@ class VectorStore:
         embedding = await self.embedding_service.embed(query, db)
         statement = select(VectorDocument).order_by(VectorDocument.embedding.cosine_distance(embedding)).limit(limit)
         result = await db.execute(statement)
-        return list(result.scalars())
+        documents = list(result.scalars())
+        logger.info(
+            "vector.search.finish",
+            extra={
+                "event": "vector.search.finish",
+                "query_length": len(query),
+                "limit": limit,
+                "result_count": len(documents),
+            },
+        )
+        return documents

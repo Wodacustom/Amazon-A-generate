@@ -1,13 +1,17 @@
 """OpenAI-compatible 厂商适配器。"""
 
 import base64
+import time
 from collections.abc import Sequence
 from typing import Any
 
 import httpx
 
+from app.core.logging import get_logger
 from app.services.model_config import ModelConfigurationError, ModelProfileConfig
 from app.services.models.types import GeneratedImage, ImageGenerationInput, ImageGenerationOutput, Message
+
+logger = get_logger(__name__)
 
 
 class OpenAIAdapter:
@@ -80,6 +84,20 @@ class OpenAIAdapter:
         url = f"{self.profile.base_url.rstrip('/')}/images/{operation}"
         headers = {"Authorization": f"Bearer {self.profile.api_key}"}
         timeout = httpx.Timeout(self.profile.timeout_seconds)
+        started = time.perf_counter()
+        logger.info(
+            "provider.image.request.start",
+            extra={
+                "event": "provider.image.request.start",
+                "provider": self.provider_name,
+                "model": self.profile.model,
+                "operation": operation,
+                "has_image": request.image is not None,
+                "has_mask": request.mask is not None,
+                "size": request.size,
+                "n": request.n,
+            },
+        )
         async with httpx.AsyncClient(timeout=timeout) as client:
             if operation == "generations":
                 response = await client.post(
@@ -97,9 +115,31 @@ class OpenAIAdapter:
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
+            logger.warning(
+                "provider.image.request.failed",
+                extra={
+                    "event": "provider.image.request.failed",
+                    "provider": self.provider_name,
+                    "model": self.profile.model,
+                    "operation": operation,
+                    "status_code": response.status_code,
+                    "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+                },
+            )
             raise ModelConfigurationError(
                 f"{self.profile.name} image request failed: {response.status_code} {response.text[:500]}"
             ) from exc
+        logger.info(
+            "provider.image.request.finish",
+            extra={
+                "event": "provider.image.request.finish",
+                "provider": self.provider_name,
+                "model": self.profile.model,
+                "operation": operation,
+                "status_code": response.status_code,
+                "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+            },
+        )
         return response
 
     def _generation_payload(self, request: ImageGenerationInput) -> dict[str, Any]:

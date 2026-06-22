@@ -1,11 +1,13 @@
 """业务统一模型调用入口。"""
 
+import time
 from collections.abc import Sequence
 from typing import Any, TypeVar
 
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.logging import get_logger
 from app.services.model_config import ModelProfileConfig, ModelRouteConfig
 from app.services.models.factory import ModelClientFactory
 from app.services.models.fallback import FallbackExecutor
@@ -15,6 +17,7 @@ from app.services.models.strategy import ChatJsonStrategy, EmbeddingStrategy, Im
 from app.services.models.types import ImageGenerationInput, ImageGenerationOutput, Message
 
 T = TypeVar("T")
+logger = get_logger(__name__)
 
 
 class ModelService:
@@ -58,6 +61,16 @@ class ModelService:
         如果直接传 messages，则跳过模板层，主要用于测试或极少数内部调用。
         """
         route = await self.router.route(db, role, expected_type="chat")
+        logger.info(
+            "model.chat_json.start",
+            extra={
+                "event": "model.chat_json.start",
+                "role": role,
+                "primary_profile": route.primary.name,
+                "fallback_profile": route.fallback.name if route.fallback else None,
+                "has_request_template": request is not None,
+            },
+        )
         rendered = None
         if request is not None:
             # 模板保存在数据库，调整 prompt 或请求体后下一次调用立即生效。
@@ -66,6 +79,7 @@ class ModelService:
         if messages is None:
             raise ValueError("messages or request is required.")
         output_type: type[Any] = response_model or dict
+        started = time.perf_counter()
         execution = await self.chat_strategy.execute(
             route=route,
             messages=messages,
@@ -75,6 +89,19 @@ class ModelService:
         result, profile = execution.value
         # 记录实际使用的模型和模板，便于结果落库后排查路由与 fallback 行为。
         self._last_metadata = self._metadata(role, profile, template=rendered, fallback=execution)
+        logger.info(
+            "model.chat_json.finish",
+            extra={
+                "event": "model.chat_json.finish",
+                "role": role,
+                "profile": profile.name,
+                "provider": profile.provider,
+                "model": profile.model,
+                "fallback_used": execution.fallback_used,
+                "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+                "response_contract": rendered.response_contract if rendered else None,
+            },
+        )
         return result.model_dump() if isinstance(result, BaseModel) and response_model is None else result
 
     async def chat_text(
@@ -87,34 +114,81 @@ class ModelService:
     ) -> str:
         """按业务角色调用纯文本聊天模型。"""
         route = await self.router.route(db, role, expected_type="chat")
+        logger.info(
+            "model.chat_text.start",
+            extra={"event": "model.chat_text.start", "role": role, "primary_profile": route.primary.name},
+        )
 
         async def call(profile: ModelProfileConfig) -> tuple[str, ModelProfileConfig]:
             return await self.factory.create(profile).chat_text(messages, temperature=temperature), profile
 
+        started = time.perf_counter()
         execution = await self.fallback.run(
             lambda: call(route.primary),
             (lambda: call(route.fallback)) if route.fallback else None,
         )
         result, profile = execution.value
         self._last_metadata = self._metadata(role, profile, fallback=execution)
+        logger.info(
+            "model.chat_text.finish",
+            extra={
+                "event": "model.chat_text.finish",
+                "role": role,
+                "profile": profile.name,
+                "provider": profile.provider,
+                "model": profile.model,
+                "fallback_used": execution.fallback_used,
+                "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+            },
+        )
         return result
 
     async def embed_query(
         self, text: str, *, db: AsyncSession | None = None, role: str = "retrieval_embedding"
     ) -> list[float]:
         route = await self.router.route(db, role, expected_type="embedding")
+        started = time.perf_counter()
         execution = await self.embedding_strategy.embed_query(route=route, text=text)
         result, profile = execution.value
         self._last_metadata = self._metadata(role, profile, fallback=execution)
+        logger.info(
+            "model.embedding.query.finish",
+            extra={
+                "event": "model.embedding.query.finish",
+                "role": role,
+                "profile": profile.name,
+                "provider": profile.provider,
+                "model": profile.model,
+                "text_length": len(text),
+                "dimensions": len(result),
+                "fallback_used": execution.fallback_used,
+                "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+            },
+        )
         return result
 
     async def embed_documents(
         self, texts: Sequence[str], *, db: AsyncSession | None = None, role: str = "retrieval_embedding"
     ) -> list[list[float]]:
         route = await self.router.route(db, role, expected_type="embedding")
+        started = time.perf_counter()
         execution = await self.embedding_strategy.embed_documents(route=route, texts=texts)
         result, profile = execution.value
         self._last_metadata = self._metadata(role, profile, fallback=execution)
+        logger.info(
+            "model.embedding.documents.finish",
+            extra={
+                "event": "model.embedding.documents.finish",
+                "role": role,
+                "profile": profile.name,
+                "provider": profile.provider,
+                "model": profile.model,
+                "document_count": len(texts),
+                "dimensions": len(result[0]) if result else 0,
+                "fallback_used": execution.fallback_used,
+                "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+            },
+        )
         return result
 
     async def generate_image(
@@ -133,9 +207,38 @@ class ModelService:
             route = ModelRouteConfig(role=role, primary=profile)
         else:
             route = await self.router.route(db, role, expected_type="image")
+        logger.info(
+            "model.image.start",
+            extra={
+                "event": "model.image.start",
+                "role": role,
+                "model_profile_id": model_profile_id,
+                "primary_profile": route.primary.name,
+                "has_image": request.image is not None,
+                "has_mask": request.mask is not None,
+                "size": request.size,
+                "n": request.n,
+                "prompt_length": len(request.prompt),
+            },
+        )
+        started = time.perf_counter()
         execution = await self.image_strategy.generate(route=route, request=request)
         result, profile = execution.value
         self._last_metadata = self._metadata(role, profile, fallback=execution)
+        logger.info(
+            "model.image.finish",
+            extra={
+                "event": "model.image.finish",
+                "role": role,
+                "profile": profile.name,
+                "provider": profile.provider,
+                "model": profile.model,
+                "operation": result.operation,
+                "image_count": len(result.images),
+                "fallback_used": execution.fallback_used,
+                "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+            },
+        )
         return result
 
     def llm_metadata(self) -> dict[str, Any]:

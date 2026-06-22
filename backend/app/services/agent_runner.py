@@ -9,11 +9,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents import ProductAgentGraph
+from app.core.logging import get_logger
 from app.models.agent import AgentResult, AgentRun
 from app.models.product import Product
 from app.schemas.agent import AgentRunCreate
 from app.services.redis_client import get_redis
 from app.services.vectorstore import VectorStore
+
+logger = get_logger(__name__)
 
 
 class AgentRunner:
@@ -30,6 +33,15 @@ class AgentRunner:
         run = AgentRun(product_id=payload.product_id, status="running", progress=10, current_step="retrieving_context", input_snapshot=product_input)
         db.add(run)
         await db.flush()
+        logger.info(
+            "agent.run.created",
+            extra={
+                "event": "agent.run.created",
+                "run_id": str(run.id),
+                "product_id": str(payload.product_id) if payload.product_id else None,
+                "product_name": product_input.get("name"),
+            },
+        )
         await self._set_progress(run.id, 10, "retrieving_context")
 
         try:
@@ -39,6 +51,10 @@ class AgentRunner:
                 {"source_type": doc.source_type, "source_id": doc.source_id, "content": doc.content, "metadata": doc.document_metadata}
                 for doc in context_docs
             ]
+            logger.info(
+                "agent.context.retrieved",
+                extra={"event": "agent.context.retrieved", "run_id": str(run.id), "context_count": len(context)},
+            )
             await self._set_progress(run.id, 35, "running_graph")
             state = await self.graph.run(product_input, context, db)
             if state.get("errors"):
@@ -68,9 +84,20 @@ class AgentRunner:
             await db.commit()
             await db.refresh(run)
             await db.refresh(result)
+            logger.info(
+                "agent.run.completed",
+                extra={
+                    "event": "agent.run.completed",
+                    "run_id": str(run.id),
+                    "result_id": str(result.id),
+                    "module_count": len(result.content_modules),
+                    "image_prompt_count": len(result.image_prompts),
+                },
+            )
             return run, result
         except Exception as exc:
             # MVP 阶段直接把错误写入 run，方便前端轮询展示。
+            logger.exception("agent.run.failed", extra={"event": "agent.run.failed", "run_id": str(run.id)})
             run.status = "failed"
             run.progress = 100
             run.current_step = "failed"
@@ -111,6 +138,10 @@ class AgentRunner:
             await get_redis().hset(f"agent_run:{run_id}", mapping={"progress": progress, "step": step})
             await get_redis().expire(f"agent_run:{run_id}", 3600)
         except Exception:
+            logger.warning(
+                "agent.progress.redis_failed",
+                extra={"event": "agent.progress.redis_failed", "run_id": str(run_id), "progress": progress, "step": step},
+            )
             return
 
     def _document_text(self, product_input: dict) -> str:

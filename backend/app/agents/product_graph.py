@@ -6,7 +6,10 @@ from langgraph.graph import END, START, StateGraph
 
 from app.model_requests import APlusContentRequest, APlusContentResponse, ImagePromptRequest, ImagePromptResponse
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.services.models import ModelService
+
+logger = get_logger(__name__)
 
 
 class AgentState(TypedDict, total=False):
@@ -44,6 +47,14 @@ class ProductAgentGraph:
 
     async def run(self, product_input: dict, retrieved_context: list[dict] | None = None, db: Any = None) -> AgentState:
         """运行智能体图，返回包含内容模块和图片提示词的最终状态。"""
+        logger.info(
+            "agent.graph.start",
+            extra={
+                "event": "agent.graph.start",
+                "product_name": product_input.get("name"),
+                "context_count": len(retrieved_context or []),
+            },
+        )
         return await self._graph.ainvoke(
             {"product_input": product_input, "retrieved_context": retrieved_context or [], "db": db}
         )
@@ -54,6 +65,8 @@ class ProductAgentGraph:
         errors = []
         if not product.get("name"):
             errors.append("Product name is required.")
+        if errors:
+            logger.warning("agent.input.invalid", extra={"event": "agent.input.invalid", "error_count": len(errors)})
         return {"errors": errors}
 
     def _retrieve_context(self, state: AgentState) -> AgentState:
@@ -89,9 +102,13 @@ class ProductAgentGraph:
                 response_model=APlusContentResponse,
             )
             if response.content_modules:
+                logger.info(
+                    "agent.content.generated",
+                    extra={"event": "agent.content.generated", "module_count": len(response.content_modules)},
+                )
                 return {"content_modules": response.content_modules}
         except Exception:
-            pass
+            logger.exception("agent.content.model_failed", extra={"event": "agent.content.model_failed"})
         return {"content_modules": self._fallback_content_modules(product, analysis)}
 
     async def _generate_image_prompts(self, state: AgentState) -> AgentState:
@@ -106,9 +123,13 @@ class ProductAgentGraph:
                 response_model=ImagePromptResponse,
             )
             if response.image_prompts:
+                logger.info(
+                    "agent.image_prompts.generated",
+                    extra={"event": "agent.image_prompts.generated", "image_prompt_count": len(response.image_prompts)},
+                )
                 return {"image_prompts": response.image_prompts, "analysis": self._analysis_with_metadata(state)}
         except Exception:
-            pass
+            logger.exception("agent.image_prompts.model_failed", extra={"event": "agent.image_prompts.model_failed"})
         return {
             "image_prompts": self._fallback_image_prompts(product, modules),
             "analysis": self._analysis_with_metadata(state),
@@ -116,6 +137,7 @@ class ProductAgentGraph:
 
     def _fallback_content_modules(self, product: dict, analysis: dict) -> list[dict]:
         """生成本地 fallback 内容模块。"""
+        logger.warning("agent.content.fallback", extra={"event": "agent.content.fallback", "product_name": product.get("name")})
         name = product.get("name", "Product")
         benefits = analysis.get("primary_benefits") or ["Reliable quality", "Simple daily use", "Clean presentation"]
         return [
@@ -139,6 +161,10 @@ class ProductAgentGraph:
 
     def _fallback_image_prompts(self, product: dict, modules: list[dict]) -> list[dict]:
         """生成本地 fallback 图片提示词。"""
+        logger.warning(
+            "agent.image_prompts.fallback",
+            extra={"event": "agent.image_prompts.fallback", "module_count": len(modules)},
+        )
         return [
             {
                 "module_type": module["type"],

@@ -4,7 +4,10 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import TypeVar
 
+from app.core.logging import get_logger
+
 T = TypeVar("T")
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -33,4 +36,8 @@ class FallbackExecutor:
         except Exception as exc:
             if fallback is None:
                 raise
+            logger.warning(
+                "model.fallback.triggered",
+                extra={"event": "model.fallback.triggered", "failure_reason": str(exc)},
+            )
             return FallbackResult(value=await fallback(), fallback_used=True, failure_reason=str(exc))

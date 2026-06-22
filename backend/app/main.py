@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.core.config import settings
+from app.core.logging import RequestLoggingMiddleware, configure_logging
 from app.services.redis_client import close_redis
 
 
@@ -23,7 +24,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 def create_app() -> FastAPI:
     """创建 FastAPI 应用实例。"""
+    configure_logging()
     app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
+    app.add_middleware(RequestLoggingMiddleware)
     # 前端开发端口较多，允许来源统一从配置读取。
     app.add_middleware(
         CORSMiddleware,

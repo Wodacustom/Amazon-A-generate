@@ -79,6 +79,7 @@ services:
     environment:
       APP_NAME: ${APP_NAME:-aplus-agent-api}
       APP_VERSION: ${APP_VERSION:-0.1.0}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:password@postgres:5432/aplus_agent}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-secret-change-me}

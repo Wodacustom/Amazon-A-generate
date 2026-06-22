@@ -9,6 +9,9 @@ from botocore.client import Config
 from botocore.exceptions import ClientError
 
 from app.core.config import settings
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -68,6 +71,16 @@ class ObjectStorage:
             Body=data,
             ContentType=content_type or "application/octet-stream",
         )
+        logger.info(
+            "storage.put.finish",
+            extra={
+                "event": "storage.put.finish",
+                "bucket": settings.s3_bucket,
+                "object_key": object_key,
+                "size_bytes": len(data),
+                "content_type": content_type,
+            },
+        )
         return StoredObject(
             bucket=settings.s3_bucket,
             object_key=object_key,
@@ -78,17 +91,38 @@ class ObjectStorage:
 
     async def presign_get_url(self, object_key: str, *, expires_in: int = 7200) -> str:
         """生成对象临时访问链接。"""
-        return await asyncio.to_thread(
+        url = await asyncio.to_thread(
             self._public_client.generate_presigned_url,
             "get_object",
             Params={"Bucket": settings.s3_bucket, "Key": object_key},
             ExpiresIn=expires_in,
         )
+        logger.info(
+            "storage.presign.finish",
+            extra={
+                "event": "storage.presign.finish",
+                "bucket": settings.s3_bucket,
+                "object_key": object_key,
+                "expires_in": expires_in,
+                "public_endpoint_configured": bool(settings.s3_public_base_url),
+            },
+        )
+        return url
 
     async def get_bytes(self, object_key: str) -> tuple[bytes, str | None]:
         """从对象存储读取文件内容。"""
         response = await asyncio.to_thread(self._client.get_object, Bucket=settings.s3_bucket, Key=object_key)
         body = await asyncio.to_thread(response["Body"].read)
+        logger.info(
+            "storage.get.finish",
+            extra={
+                "event": "storage.get.finish",
+                "bucket": settings.s3_bucket,
+                "object_key": object_key,
+                "content_type": response.get("ContentType"),
+                "size_bytes": len(body),
+            },
+        )
         return body, response.get("ContentType")
 
     def _ensure_bucket_sync(self) -> None:
@@ -97,6 +131,7 @@ class ObjectStorage:
             self._client.head_bucket(Bucket=settings.s3_bucket)
         except ClientError:
             self._client.create_bucket(Bucket=settings.s3_bucket)
+            logger.info("storage.bucket.created", extra={"event": "storage.bucket.created", "bucket": settings.s3_bucket})
 
 
 def get_storage() -> ObjectStorage:

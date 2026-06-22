@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.logging import get_logger
 from app.core.config import settings
 from app.models.model_config import ModelProfile, ModelRequestTemplate, ModelRoute
 from app.services.security import decrypt_secret
@@ -14,6 +15,9 @@ from app.services.security import decrypt_secret
 
 class ModelConfigurationError(RuntimeError):
     """模型配置不可用。"""
+
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -64,14 +68,32 @@ class ModelConfigRepository:
             # 数据库配置优先，保证后台调整 route/profile 后无需重启服务。
             route = await self._get_db_route(db, role, expected_type=expected_type)
             if route is not None:
+                logger.info(
+                    "model.route.db",
+                    extra={
+                        "event": "model.route.db",
+                        "role": role,
+                        "expected_type": expected_type,
+                        "primary_profile": route.primary.name,
+                        "fallback_profile": route.fallback.name if route.fallback else None,
+                    },
+                )
                 return route
         # 没有数据库配置时使用环境变量 fallback，方便本地开发和测试。
+        logger.info(
+            "model.route.fallback",
+            extra={"event": "model.route.fallback", "role": role, "expected_type": expected_type},
+        )
         return self._fallback_route(role, expected_type=expected_type)
 
     async def get_profile(self, db: AsyncSession, profile_id: int, *, expected_type: str) -> ModelProfileConfig:
         """按 ID 获取单个模型档案，供管理测试或手动覆盖路由使用。"""
         profile = await db.get(ModelProfile, profile_id)
         if profile is None:
+            logger.warning(
+                "model.profile.not_found",
+                extra={"event": "model.profile.not_found", "profile_id": profile_id, "expected_type": expected_type},
+            )
             raise ModelConfigurationError(f"Model profile {profile_id} not found.")
         return self._profile_config(profile, expected_type=expected_type)
 
@@ -125,8 +147,27 @@ class ModelConfigRepository:
     def _profile_config(self, profile: ModelProfile, *, expected_type: str) -> ModelProfileConfig:
         """把 ORM 模型转换为运行时配置，并在这里做启用状态和类型校验。"""
         if not profile.enabled or profile.deleted:
+            logger.warning(
+                "model.profile.disabled",
+                extra={
+                    "event": "model.profile.disabled",
+                    "profile": profile.name,
+                    "profile_id": profile.id,
+                    "model_type": profile.model_type,
+                },
+            )
             raise ModelConfigurationError(f"Model profile {profile.name} is disabled.")
         if profile.model_type != expected_type:
+            logger.warning(
+                "model.profile.type_mismatch",
+                extra={
+                    "event": "model.profile.type_mismatch",
+                    "profile": profile.name,
+                    "profile_id": profile.id,
+                    "model_type": profile.model_type,
+                    "expected_type": expected_type,
+                },
+            )
             raise ModelConfigurationError(
                 f"Model profile {profile.name} type {profile.model_type} does not match {expected_type}."
             )

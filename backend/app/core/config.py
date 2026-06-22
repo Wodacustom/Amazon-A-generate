@@ -12,6 +12,7 @@ class Settings(BaseSettings):
 
     app_name: str = "aplus-agent-api"
     app_version: str = "0.1.0"
+    log_level: str = "INFO"
 
     database_url: str = "postgresql+asyncpg://postgres:password@127.0.0.1:5432/aplus_agent"
     redis_url: str = "redis://localhost:6379/0"

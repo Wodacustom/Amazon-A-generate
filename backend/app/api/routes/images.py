@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.core.logging import get_logger
 from app.models.file import FileAsset
 from app.schemas.image_generation import GeneratedImageRead, ImageGenerationRead
 from app.services.models import ModelService
@@ -14,6 +15,7 @@ from app.services.models.types import ImageFileInput, ImageGenerationInput
 from app.services.storage import get_storage
 
 router = APIRouter()
+logger = get_logger(__name__)
 
 PRESIGNED_EXPIRES_IN = 7200
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
@@ -32,6 +34,19 @@ async def generate_image(
     db: AsyncSession = Depends(get_db),
 ) -> ImageGenerationRead:
     """生成或编辑图片，并把结果保存到对象存储后返回预签名链接。"""
+    logger.info(
+        "image.generate.start",
+        extra={
+            "event": "image.generate.start",
+            "role": role,
+            "model_profile_id": model_profile_id,
+            "prompt_length": len(prompt),
+            "has_image": image is not None,
+            "has_mask": mask is not None,
+            "size": size,
+            "n": n,
+        },
+    )
     if mask is not None and image is None:
         raise HTTPException(status_code=400, detail="mask requires image.")
     if not prompt.strip():
@@ -57,6 +72,10 @@ async def generate_image(
             model_profile_id=model_profile_id,
         )
     except Exception as exc:
+        logger.exception(
+            "image.generate.error",
+            extra={"event": "image.generate.error", "role": role, "model_profile_id": model_profile_id},
+        )
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     storage = get_storage()
@@ -81,6 +100,16 @@ async def generate_image(
         )
         db.add(asset)
         await db.flush()
+        logger.info(
+            "image.file.saved",
+            extra={
+                "event": "image.file.saved",
+                "file_id": str(asset.id),
+                "object_key": stored.object_key,
+                "size_bytes": stored.size_bytes,
+                "content_type": stored.content_type,
+            },
+        )
         items.append(
             GeneratedImageRead(
                 file_id=asset.id,
@@ -92,6 +121,18 @@ async def generate_image(
             )
         )
     await db.commit()
+    logger.info(
+        "image.generate.finish",
+        extra={
+            "event": "image.generate.finish",
+            "role": role,
+            "model_profile_id": model_profile_id,
+            "operation": output.operation,
+            "image_count": len(items),
+            "provider": metadata.get("model_provider") or output.raw_metadata.get("provider"),
+            "model": metadata.get("model_name") or output.raw_metadata.get("model"),
+        },
+    )
     return ImageGenerationRead(items=items, usage=output.usage, metadata=metadata)
 
 
@@ -100,6 +141,15 @@ async def _read_upload(upload: UploadFile) -> ImageFileInput:
     if not data:
         raise HTTPException(status_code=400, detail=f"{upload.filename or 'file'} is empty.")
     if len(data) > MAX_UPLOAD_BYTES:
+        logger.warning(
+            "image.upload.too_large",
+            extra={
+                "event": "image.upload.too_large",
+                "file_name": upload.filename,
+                "size_bytes": len(data),
+                "max_bytes": MAX_UPLOAD_BYTES,
+            },
+        )
         raise HTTPException(status_code=413, detail=f"{upload.filename or 'file'} exceeds 50MB.")
     return ImageFileInput(filename=upload.filename or "image.png", data=data, content_type=upload.content_type)
 
