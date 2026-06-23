@@ -78,3 +78,7 @@ env/
 .vscode/settings.json
 AGENTS.md
 *.md
+
+# Agent AI
+.agents
+.codex
